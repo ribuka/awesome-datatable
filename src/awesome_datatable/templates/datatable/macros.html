@@ -37,17 +37,25 @@
   {% if view.state.sort_by == column.name %} aria-sort="{{ 'descending' if view.state.descending else 'ascending' }}"{% endif %}
 {%- endmacro %}
 
-{#- The value filter of a column menu: a search, a list of values to check
-    with their counts, or lower and upper bounds. Typed inputs are preserved
-    across reloads (hx-preserve), so text typed while the table reloads is
-    kept; the bounds have no value from the server but this. -#}
+{#- The search of a column menu (q__<column>). It is preserved across
+    reloads (hx-preserve), so text typed while the table reloads is kept. -#}
+{% macro _search(config, view, column, index, label) -%}
+  <input type="text" id="{{ config.table_id }}-filter-q-{{ index }}" name="{{ config.prefix }}q__{{ column.name }}" value="{{ view.state.text.get(column.name, '') }}" placeholder="Search"
+         aria-label="{{ label }}" data-dt-query hx-preserve>
+{%- endmacro %}
+
+{#- The value filter of a column menu: a search, a search above a list of
+    values to check with their counts, or lower and upper bounds. Typed
+    inputs are preserved across reloads (hx-preserve), so text typed while
+    the table reloads is kept; the bounds have no value from the server but
+    this. -#}
 {% macro _filter(config, view, column, index) -%}
-  {% set name = config.prefix ~ {"text": "q__", "choice": "eq__"}.get(column.filter, "") ~ column.name %}
+  {% set name = config.prefix ~ "eq__" ~ column.name %}
   <div class="dt-menu-section dt-filter">
     {% if column.filter == "text" %}
-      <input type="text" id="{{ config.table_id }}-filter-q-{{ index }}" name="{{ name }}" value="{{ view.state.text.get(column.name, '') }}" placeholder="Search"
-             aria-label="{{ column.filter_name }}" data-dt-query hx-preserve>
+      {{ _search(config, view, column, index, column.filter_name) }}
     {% elif column.filter == "choice" %}
+      {{ _search(config, view, column, index, "Search " ~ column.header) }}
       {% set values = view.options.get(column.name, []) %}
       {% set chosen = view.state.equals.get(column.name, ()) %}
       {% set counts = view.counts.values.get(column.name, {}) %}
