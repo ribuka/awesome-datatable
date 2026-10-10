@@ -357,7 +357,9 @@ header checkbox's matching keys, the export, and anything else built on
   puts in the page later on its `htmx:load`, as a whole swap does.
 - While a reload is pending, the container has `htmx-request` and
   `aria-busy="true"`: after 0.1 s the rows fade and a spinner turns over the
-  table.
+  table, which keeps its height. Before the first fragment arrives, the
+  spinner turns beside the container's "Loading…" (`.dt-loading`) instead.
+  Both end with the request, also when it fails or is aborted.
 - Under the table, the footer shows "N rows, M columns" (the rows matching
   the filters and the shown columns), for a selectable table the selection
   count ("k selected", or "k / max selected" with `max_selected`) and Clear

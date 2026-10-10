@@ -729,6 +729,27 @@
   animation: dt-spin 0.8s linear infinite, dt-appear 0s 0.1s forwards;
 }
 
+/* Before the first fragment arrives, the spinner turns beside "Loading…"
+   instead of over it, after the same moment. */
+.dt-root.htmx-request:has(> .dt-loading)::after {
+  content: none;
+}
+
+.dt-root.htmx-request > .dt-loading::before {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: 0.4em;
+  box-sizing: border-box;
+  border: 2px solid var(--dt-border);
+  border-top-color: var(--dt-accent);
+  border-radius: 50%;
+  vertical-align: -0.15em;
+  content: "";
+  opacity: 0;
+  animation: dt-spin 0.8s linear infinite, dt-appear 0s 0.1s forwards;
+}
+
 @keyframes dt-spin {
   to {
     transform: rotate(360deg);
@@ -742,7 +763,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dt-root.htmx-request::after {
+  .dt-root.htmx-request::after,
+  .dt-root.htmx-request > .dt-loading::before {
     animation: dt-appear 0s 0.1s forwards;
   }
 }
