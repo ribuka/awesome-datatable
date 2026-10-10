@@ -120,6 +120,8 @@ def test_parse_selection_reads_a_json_array() -> None:
         {"t.sort": ["key"], "t.order": ["desc"]},
         {"t.q__name": ["ALPHA"]},
         {"t.eq__group": ["a", "b"]},
+        {"t.q__group": ["B"]},
+        {"t.q__group": ["a"], "t.eq__group": ["a", "b"]},
         {"t.min__count": ["2"]},
         {"t.max__score": ["1.5"], "t.sort": ["score"]},
         {"t.min__when": ["2026-02-01T00:00"]},

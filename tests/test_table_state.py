@@ -15,6 +15,7 @@ def test_parse_state_reads_filters_sort_and_page(config: TableConfig) -> None:
     state = parse_state(
         {
             "t.q__name": [" alp b "],
+            "t.q__group": [" A "],
             "t.eq__group": ["a"],
             "t.min__count": ["2"],
             "t.max__count": [""],
@@ -32,7 +33,7 @@ def test_parse_state_reads_filters_sort_and_page(config: TableConfig) -> None:
         sort_by="score",
         descending=True,
         page=3,
-        text={"name": "alp b"},
+        text={"name": "alp b", "group": "A"},
         equals={"group": ("a",)},
         ranges={"count": (2.0, None), "when": (None, datetime.fromisoformat("2026-02-01"))},
         nulls={"score": "is_not_null"},
@@ -101,7 +102,7 @@ def test_parse_state_without_default_sort_keeps_frame_order() -> None:
         ({"t.eq__note": ["x"]}, "unknown filter column"),
         ({"t.min__group": ["1"]}, "does not fit"),
         ({"t.eq__count": ["1"]}, "does not fit"),
-        ({"t.q__group": ["a"]}, "does not fit"),
+        ({"t.q__count": ["1"]}, "does not fit"),
         ({"t.min__count": ["abc"]}, "invalid bound"),
         ({"t.max__when": ["yesterday"]}, "invalid bound"),
         ({"t.null__count": ["null"]}, "invalid null filter"),

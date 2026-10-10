@@ -25,12 +25,14 @@ def test_filter_chips_list_every_filter_in_column_order(config: TableConfig) -> 
             "t.max__count": ["3"],
             "t.min__when": ["2026-01-01T12:30"],
             "t.q__name": [" alp  b "],
+            "t.q__group": ["A"],
         },
         config,
     )
 
     assert filter_chips(state, config) == [
         FilterChip('name ~ "alp  b"', ("t.q__name",)),
+        FilterChip('group ~ "A"', ("t.q__group",)),
         FilterChip("group ∈ {b, a}", ("t.eq__group",)),
         FilterChip("group is_null", ("t.null__group",)),
         FilterChip("count ≤ 3", ("t.min__count", "t.max__count")),

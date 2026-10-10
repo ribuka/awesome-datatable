@@ -20,13 +20,15 @@ class ColumnConfig:
         Header text; the column name if ``None``.
     filter : FilterKind | None, default None
         Filter in the column menu: ``"text"`` (a search for words in any
-        order and case), ``"choice"`` (any of the values checked in a list),
+        order and case), ``"choice"`` (that search above a list of values
+        to check, one of which a value must be),
         ``"number"`` or ``"datetime"`` (inclusive lower and upper bounds), or
         ``None`` for no filter. A column with a filter also has a null
         filter (``is_null`` / ``is_not_null``).
     filter_label : str | None, default None
-        Accessible name of a ``"text"`` or ``"choice"`` filter; ``"Filter by
-        <label>"`` if ``None``.
+        Accessible name of a ``"text"`` filter or of the value list of a
+        ``"choice"`` filter (whose search is ``"Search <label>"``);
+        ``"Filter by <label>"`` if ``None``.
     sortable : bool, default True
         Whether the column menu sorts by the column.
     frame_order : bool, default False

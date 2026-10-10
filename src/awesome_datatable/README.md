@@ -149,8 +149,8 @@ Update this document whenever the component gains a feature.
 | --- | --- |
 | `name` | Frame column. |
 | `label` | Header text (default: `name`). |
-| `filter` | `"text"` (a search: every whitespace-separated word as plain text, in any order and case), `"choice"` (any of the values checked in a list with their counts), `"number"` / `"datetime"` (inclusive lower and upper bounds), or `None`. A column with a filter also has a null filter. Filters combine with AND. |
-| `filter_label` | Accessible name of a text filter or of the value list of a choice filter (default: `Filter by <label>`). Bounds are named `<label> lower` / `<label> upper`. |
+| `filter` | `"text"` (a search: every whitespace-separated word as plain text, in any order and case), `"choice"` (the same search, above a list of values with their counts to check; a row must have any of the checked values), `"number"` / `"datetime"` (inclusive lower and upper bounds), or `None`. A column with a filter also has a null filter. Filters combine with AND. |
+| `filter_label` | Accessible name of a text filter or of the value list of a choice filter (default: `Filter by <label>`). The search of a choice filter is named `Search <label>`; bounds are named `<label> lower` / `<label> upper`. |
 | `sortable` | Whether the column menu sorts (default: `True`). Sorting puts nulls last and keeps the frame's order among ties. |
 | `frame_order` | The frame's order is the column's ascending order (for example a key in natural order); sorting by it keeps or reverses the frame. |
 | `title_column` | Frame column shown as the cell's tooltip. |
@@ -170,7 +170,7 @@ does not fit its column, or an unparsable value is a `ValueError`.
 | `page` | 1-based page number; a page past the last shows the last. |
 | `page_size` | Rows per page, one of `page_size_choices` (`page_sizes` and `page_size`; only with `page_sizes`); default `page_size`. |
 | `search` | Search of the whole table (only with `search=True`): every whitespace-separated word, in any order, ignoring case, as plain text, must be in some shown `pl.String` column of the row (`search_columns`; each word in any of them). Other types, `title_column`, and columns of the frame that are not shown are not searched; nulls hold no word. |
-| `q__<column>` | Search of a `"text"` column: the value must contain every whitespace-separated word, in any order, ignoring case, as plain text (not a regular expression). `b01 lotA` matches `LotA_B01_run3`. |
+| `q__<column>` | Search of a `"text"` or `"choice"` column: the value must contain every whitespace-separated word, in any order, ignoring case, as plain text (not a regular expression). `b01 lotA` matches `LotA_B01_run3`. |
 | `eq__<column>` | A value of a `"choice"` column, repeated for several (`?t.eq__lot=A&t.eq__lot=B`); a row matches any of them (`is_in`). |
 | `min__<column>`, `max__<column>` | Bounds of a `"number"` (an integer stays an `int` and is compared exactly with an integer column when it fits 64 bits; otherwise it is compared as a float, `±inf` past the float range) or `"datetime"` (ISO 8601, as `datetime-local` sends) column. |
 | `null__<column>` | `is_null` (only the null values) or `is_not_null` (no null values) for any column with a filter. |
@@ -296,13 +296,14 @@ header checkbox's matching keys, the export, and anything else built on
   - Categorical, enum, and boolean columns: the five most frequent values
     (ties by value) with bars as long as their rows relative to the first,
     and `Others` with the rows of the other values. Values not checked in
-    the column's filter are faded.
+    the column's filter are faded. The search of a `"choice"` column fades
+    nothing.
   - Nulls are not counted (the null filter shows them); a column without a
     non-null value, or of another type (text, for example), has none.
 - Clicking the column name (or Enter / Space on it) opens the column menu,
   a popover (`popover`, `popovertarget`) holding the column's controls:
-  sort (Asc, Desc, Clear sort), the filter (search, values with their
-  counts, or lower and upper bounds), the null filter (Any, Is null, Is not
+  sort (Asc, Desc, Clear sort), the filter (search, search above values
+  with their counts, or lower and upper bounds), the null filter (Any, Is null, Is not
   null, with the null count), "Copy column name" (the frame's column
   name), and under a column with filters the `Apply` (✓), `Cancel` (×), and
   `Clear` (trash) buttons. A click outside or Escape closes it and returns

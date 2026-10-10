@@ -172,6 +172,23 @@ def test_fragment_shows_choice_and_null_counts_and_filter_marks(
     assert marked == ["name", "group", "when"]
 
 
+def test_fragment_puts_a_search_above_the_values_of_a_choice_column(
+    environment: Environment, config: TableConfig, frame: pl.DataFrame
+) -> None:
+    """A choice menu searches its values above the list; the search alone marks the column."""
+    view = apply_state(frame, parse_state({"t.q__group": ["A"]}, config), config)
+
+    html = _render(environment, "{{ fragment(config, view) }}", config=config, view=view)
+
+    group = _menu(html, "group")
+    search = re.search(r'<input type="text" id="t-filter-q-\d+" name="t.q__group" value="A"[^>]*>', group)
+    assert search is not None
+    assert 'aria-label="Search group" data-dt-query hx-preserve>' in search[0]
+    assert search.start() < group.index('<fieldset class="dt-choices">')
+    assert "data-dt-filtered" in _header(html, "group")
+    assert re.search(r'data-dt-clear-filter data-dt-part="clear-\d+">', group)
+
+
 def test_fragment_puts_apply_cancel_and_clear_under_the_filters(
     environment: Environment, config: TableConfig, frame: pl.DataFrame
 ) -> None:

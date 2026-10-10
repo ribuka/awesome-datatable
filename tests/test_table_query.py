@@ -102,6 +102,39 @@ def test_text_filter_searches_words_as_plain_text(search: str, expected: list[st
 
 
 @pytest.mark.parametrize(
+    ("parameters", "expected"),
+    [
+        # The rule of the "text" filter: every word, in any order and case,
+        # as plain text; nulls match no search.
+        ({"t.q__lot": ["b01 lotA"]}, ["k1"]),
+        ({"t.q__lot": ["RUN3"]}, ["k1", "k2"]),
+        ({"t.q__lot": ["a.b"]}, []),
+        # AND with the values checked and the null filter.
+        ({"t.q__lot": ["run3"], "t.eq__lot": ["lotb.b02(run3)", "LotC"]}, ["k2"]),
+        ({"t.q__lot": ["lot"], "t.null__lot": ["is_null"]}, []),
+        ({"t.q__lot": ["lot"], "t.null__lot": ["is_not_null"]}, ["k1", "k2", "k3"]),
+    ],
+)
+def test_choice_filter_searches_its_values(parameters: dict[str, list[str]], expected: list[str]) -> None:
+    """A ``"choice"`` column also takes a search, combined with its values and nulls by AND."""
+    frame = pl.DataFrame(
+        {"key": ["k1", "k2", "k3", "k4"], "lot": ["LotA_B01_run3", "lotb.b02(run3)", "LotC", None]},
+        schema_overrides={"lot": pl.Categorical()},
+    )
+    config = TableConfig(
+        table_id="t",
+        key="key",
+        columns=(ColumnConfig("key"), ColumnConfig("lot", filter="choice")),
+        url="/",
+        selectable=True,
+    )
+
+    state = parse_state(parameters, config)
+
+    assert apply_state(frame, state, config).matching_keys == expected
+
+
+@pytest.mark.parametrize(
     ("search", "expected"),
     [
         # Each word in any text column (key, name, group, note), in any case.
@@ -161,6 +194,8 @@ def test_search_terms_split_on_whitespace_in_lowercase() -> None:
     [
         {"t.q__name": ["a"]},
         {"t.eq__group": ["a", "b"]},
+        {"t.q__group": ["B"]},
+        {"t.q__group": ["a"], "t.eq__group": ["a", "b"], "t.null__group": ["is_not_null"]},
         {"t.min__score": ["1"]},
         {"t.max__when": ["2026-02-01T00:00"]},
         {"t.null__count": ["is_not_null"]},

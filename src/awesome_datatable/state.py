@@ -22,7 +22,7 @@ MAX_PREFIX = "max__"
 NULL_PREFIX = "null__"
 # The filter parameter prefixes and the filter kinds they fit.
 FILTER_PREFIXES = {
-    TEXT_PREFIX: ("text",),
+    TEXT_PREFIX: ("text", "choice"),
     EQUALS_PREFIX: ("choice",),
     MIN_PREFIX: ("number", "datetime"),
     MAX_PREFIX: ("number", "datetime"),
@@ -59,8 +59,8 @@ class TableState:
         by whitespace that the row's ``pl.String`` columns must all contain,
         each in any of them, in any order and case.
     text : dict[str, str]
-        Searches of ``"text"`` columns: words separated by whitespace that a
-        value must all contain, in any order and case.
+        Searches of ``"text"`` and ``"choice"`` columns: words separated by
+        whitespace that a value must all contain, in any order and case.
     equals : dict[str, tuple[str, ...]]
         Values of ``"choice"`` columns, one of which a row must have.
     ranges : dict[str, tuple[Bound, Bound]]
@@ -191,7 +191,8 @@ def parse_state(parameters: Mapping[str, Sequence[str]], config: TableConfig) ->
     are ignored, so several tables can share one query string. The names are
     ``sort``, ``order`` (``asc`` or ``desc``), ``page`` (a positive integer),
     ``page_size`` (one of ``TableConfig.page_size_choices``), ``search`` (only with
-    ``TableConfig.search``), and, per filtered column, ``q__<column>`` (``"text"``), ``eq__<column>``
+    ``TableConfig.search``), and, per filtered column, ``q__<column>`` (``"text"`` and
+    ``"choice"``), ``eq__<column>``
     (``"choice"``; repeated once per value), ``min__<column>`` /
     ``max__<column>`` (``"number"`` and ``"datetime"``), and
     ``null__<column>`` (``is_null`` or ``is_not_null``; every filter kind).
