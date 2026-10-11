@@ -237,13 +237,24 @@
   text-overflow: ellipsis;
 }
 
+/* A thin line in the row lines' color always separates the columns, in the
+   header and the body (like marimo's tables). It is an inset shadow on the
+   right edge of a cell, so that it takes no width from the column and moves
+   with a pinned cell; the last column has none, the box of .dt-scroll being
+   its edge. When the columns after it are hidden, datatable.js takes the
+   line from the last shown column. */
+.dt-table th:not(:last-child),
+.dt-table td:not(:last-child) {
+  box-shadow: inset -1px 0 0 var(--dt-border);
+}
+
 .dt-table thead th:not(.dt-check) {
   width: max(var(--dt-col-min-width), var(--dt-col-width));
 }
 
-/* The handle on the right edge of a header resizes its column: it shows
-   where to grab (the col-resize cursor and the accent edge) on hover, on
-   focus, and while dragged. */
+/* The handle on the right edge of a header resizes its column: the
+   col-resize cursor shows where to grab; the column's line stays as it is
+   on hover, on focus, and while dragged. */
 .dt-resizer {
   position: absolute;
   top: 0;
@@ -251,15 +262,9 @@
   bottom: 0;
   width: 0.5rem;
   cursor: col-resize;
+  outline: none;
   touch-action: none;
   user-select: none;
-}
-
-.dt-resizer:hover,
-.dt-resizer:focus-visible,
-.dt-resizer[data-dt-resizing] {
-  outline: none;
-  box-shadow: inset -2px 0 0 var(--dt-accent);
 }
 
 .dt-root[data-dt-resizing] {
@@ -639,10 +644,6 @@
 
 .dt-root[data-dt-pinned][data-dt-selection] .dt-table .dt-pinned:not(.dt-check) {
   left: var(--dt-check-width);
-}
-
-.dt-root[data-dt-pinned] .dt-table .dt-pinned:not(.dt-check) {
-  box-shadow: inset -1px 0 0 var(--dt-border);
 }
 
 .dt-root[data-dt-pinned] .dt-table thead th.dt-pinned {
