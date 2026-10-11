@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Literal, get_args
+from typing import Literal, NamedTuple, get_args
 
 from .config import ColumnConfig, TableConfig
 
@@ -190,6 +190,100 @@ def _parse_null_filter(raw: str, key: str) -> NullFilter | None:
     raise ValueError(f"invalid null filter for {key!r}: {raw!r}")
 
 
+class _Filters(NamedTuple):
+    """Column filters parsed from the query parameters of a table.
+
+    Attributes
+    ----------
+    text : dict[str, str]
+        Searches of ``"text"`` and ``"choice"`` columns.
+    equals : dict[str, tuple[str, ...]]
+        Chosen values of ``"choice"`` columns.
+    lower : dict[str, Bound]
+        Lower bounds of ``"number"`` and ``"datetime"`` columns; ``None``
+        for a blank parameter.
+    upper : dict[str, Bound]
+        Upper bounds of ``"number"`` and ``"datetime"`` columns; ``None``
+        for a blank parameter.
+    nulls : dict[str, NullFilter]
+        Null filters of every filter kind.
+    """
+
+    text: dict[str, str]
+    equals: dict[str, tuple[str, ...]]
+    lower: dict[str, Bound]
+    upper: dict[str, Bound]
+    nulls: dict[str, NullFilter]
+
+
+def _parse_filters(
+    every: Mapping[str, Sequence[str]], values: Mapping[str, str], config: TableConfig
+) -> _Filters:
+    """Parse the column filters among the query parameters of a table.
+
+    Parameters
+    ----------
+    every : Mapping[str, Sequence[str]]
+        Every value of each parameter of the table, keyed by its name without
+        ``TableConfig.prefix``.
+    values : Mapping[str, str]
+        Last value of each parameter of ``every``.
+    config : TableConfig
+        Table settings.
+
+    Returns
+    -------
+    _Filters
+        Parsed filters; blank values are left out, except blank bounds,
+        which stay as ``None``.
+
+    Raises
+    ------
+    ValueError
+        If a parameter of the table is unknown (``search`` of a table
+        without the search box too), names a column without that filter, or
+        has an unparsable bound or null filter.
+    """
+    filtered = config.filtered_columns
+    text: dict[str, str] = {}
+    equals: dict[str, tuple[str, ...]] = {}
+    lower: dict[str, Bound] = {}
+    upper: dict[str, Bound] = {}
+    nulls: dict[str, NullFilter] = {}
+    for key, value in values.items():
+        if key in (SORT_PARAMETER, ORDER_PARAMETER, PAGE_PARAMETER, PARTS_PARAMETER):
+            continue
+        if key == PAGE_SIZE_PARAMETER and config.page_sizes:
+            continue
+        if key == SEARCH_PARAMETER and config.search:
+            continue
+        prefix = next((prefix for prefix in FILTER_PREFIXES if key.startswith(prefix)), None)
+        if prefix is None:
+            raise ValueError(f"unknown parameter: {config.prefix + key!r}")
+        name = key.removeprefix(prefix)
+        column = filtered.get(name)
+        if column is None:
+            raise ValueError(f"unknown filter column: {name!r}")
+        if column.filter not in FILTER_PREFIXES[prefix]:
+            raise ValueError(f"filter {config.prefix + key!r} does not fit column type")
+        if prefix == TEXT_PREFIX:
+            if value.strip():
+                text[name] = value.strip()
+        elif prefix == EQUALS_PREFIX:
+            chosen = tuple(dict.fromkeys(raw.strip() for raw in every[key] if raw.strip()))
+            if chosen:
+                equals[name] = chosen
+        elif prefix == NULL_PREFIX:
+            null_filter = _parse_null_filter(value, config.prefix + key)
+            if null_filter is not None:
+                nulls[name] = null_filter
+        else:
+            bound = _parse_bound(value, column, config.prefix + key)
+            (lower if prefix == MIN_PREFIX else upper)[name] = bound
+
+    return _Filters(text=text, equals=equals, lower=lower, upper=upper, nulls=nulls)
+
+
 def parse_state(parameters: Mapping[str, Sequence[str]], config: TableConfig) -> TableState:
     """Build a ``TableState`` from query parameters.
 
@@ -229,42 +323,7 @@ def parse_state(parameters: Mapping[str, Sequence[str]], config: TableConfig) ->
         if key.startswith(config.prefix)
     }
     values = {key: _last(raw) for key, raw in every.items()}
-    filtered = config.filtered_columns
-    text: dict[str, str] = {}
-    equals: dict[str, tuple[str, ...]] = {}
-    lower: dict[str, Bound] = {}
-    upper: dict[str, Bound] = {}
-    nulls: dict[str, NullFilter] = {}
-    for key, value in values.items():
-        if key in (SORT_PARAMETER, ORDER_PARAMETER, PAGE_PARAMETER, PARTS_PARAMETER):
-            continue
-        if key == PAGE_SIZE_PARAMETER and config.page_sizes:
-            continue
-        if key == SEARCH_PARAMETER and config.search:
-            continue
-        prefix = next((prefix for prefix in FILTER_PREFIXES if key.startswith(prefix)), None)
-        if prefix is None:
-            raise ValueError(f"unknown parameter: {config.prefix + key!r}")
-        name = key.removeprefix(prefix)
-        column = filtered.get(name)
-        if column is None:
-            raise ValueError(f"unknown filter column: {name!r}")
-        if column.filter not in FILTER_PREFIXES[prefix]:
-            raise ValueError(f"filter {config.prefix + key!r} does not fit column type")
-        if prefix == TEXT_PREFIX:
-            if value.strip():
-                text[name] = value.strip()
-        elif prefix == EQUALS_PREFIX:
-            chosen = tuple(dict.fromkeys(raw.strip() for raw in every[key] if raw.strip()))
-            if chosen:
-                equals[name] = chosen
-        elif prefix == NULL_PREFIX:
-            null_filter = _parse_null_filter(value, config.prefix + key)
-            if null_filter is not None:
-                nulls[name] = null_filter
-        else:
-            bound = _parse_bound(value, column, config.prefix + key)
-            (lower if prefix == MIN_PREFIX else upper)[name] = bound
+    filters = _parse_filters(every, values, config)
 
     sort_by = values.get(SORT_PARAMETER, "") or config.default_sort
     if sort_by is not None and sort_by not in config.sortable_columns:
@@ -283,9 +342,9 @@ def parse_state(parameters: Mapping[str, Sequence[str]], config: TableConfig) ->
         raise ValueError(f"invalid parts: {parts!r}")
 
     ranges = {
-        name: (lower.get(name), upper.get(name))
-        for name in dict.fromkeys([*lower, *upper])
-        if lower.get(name) is not None or upper.get(name) is not None
+        name: (filters.lower.get(name), filters.upper.get(name))
+        for name in dict.fromkeys([*filters.lower, *filters.upper])
+        if filters.lower.get(name) is not None or filters.upper.get(name) is not None
     }
     return TableState(
         sort_by=sort_by,
@@ -294,8 +353,8 @@ def parse_state(parameters: Mapping[str, Sequence[str]], config: TableConfig) ->
         page_size=int(page_size) if page_size else None,
         parts=parts == "1",
         search=values.get(SEARCH_PARAMETER, "").strip(),
-        text=text,
-        equals=equals,
+        text=filters.text,
+        equals=filters.equals,
         ranges=ranges,
-        nulls=nulls,
+        nulls=filters.nulls,
     )
