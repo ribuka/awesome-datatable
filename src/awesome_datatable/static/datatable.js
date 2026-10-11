@@ -465,11 +465,13 @@
   // (`name` is the kind of choice): kept in localStorage under
   // `datatable:<name>:<table_id>` as JSON, and in memory (`preferences`),
   // so a choice holds across reloads until the page is left even where the
-  // storage cannot be read or written.
+  // storage cannot be read or written. A table may share the "Pin columns"
+  // choice of another table (`data-dt-pin-preference` names its id).
   const preferences = new Map();
 
   function preferenceKey(root, name) {
-    return `datatable:${name}:${root.id}`;
+    const id = name === "pinned-columns" ? (root.dataset.dtPinPreference ?? root.id) : root.id;
+    return `datatable:${name}:${id}`;
   }
 
   // Returns the remembered choice, or `fallback` when there is none or
@@ -581,12 +583,19 @@
     toggle?.setAttribute("aria-pressed", String(pinned));
   }
 
+  // Switching the toggle shows the choice on every table in the page that
+  // shares it (`data-dt-pin-preference`), such as the table under a dialog.
   document.addEventListener("click", (event) => {
     const toggle = event.target.closest?.("[data-dt-pin-toggle]");
     const root = toggle && tableOf(toggle);
     if (root) {
       storePreference(root, "pinned-columns", !root.hasAttribute("data-dt-pinned"));
-      syncPinned(root);
+      const key = preferenceKey(root, "pinned-columns");
+      for (const table of document.querySelectorAll("[data-datatable]")) {
+        if (preferenceKey(table, "pinned-columns") === key) {
+          syncPinned(table);
+        }
+      }
     }
   });
 
