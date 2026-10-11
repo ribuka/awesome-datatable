@@ -583,12 +583,19 @@
     toggle?.setAttribute("aria-pressed", String(pinned));
   }
 
+  // Switching the toggle shows the choice on every table in the page that
+  // shares it (`data-dt-pin-preference`), such as the table under a dialog.
   document.addEventListener("click", (event) => {
     const toggle = event.target.closest?.("[data-dt-pin-toggle]");
     const root = toggle && tableOf(toggle);
     if (root) {
       storePreference(root, "pinned-columns", !root.hasAttribute("data-dt-pinned"));
-      syncPinned(root);
+      const key = preferenceKey(root, "pinned-columns");
+      for (const table of document.querySelectorAll("[data-datatable]")) {
+        if (preferenceKey(table, "pinned-columns") === key) {
+          syncPinned(table);
+        }
+      }
     }
   });
 

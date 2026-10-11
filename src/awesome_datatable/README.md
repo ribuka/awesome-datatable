@@ -211,7 +211,8 @@ header checkbox's matching keys, the export, and anything else built on
     no shortcut key of its own. The choice is kept in `localStorage` under
     `datatable:pinned-columns:<table_id>` (`true` or `false`; with
     `pin_preference`, under that table id instead, so that the table shares
-    the choice of that table) and shown again
+    the choice of that table, and switching it updates every table in the page
+    sharing the choice) and shown again
     after every reload (`data-dt-pinned` on the container, which the reloads
     keep, so the table does not jump). Without storage it lasts until the
     page is left, like the hidden columns. A table without the toggle pins
