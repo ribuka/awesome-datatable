@@ -241,7 +241,8 @@
    header and the body (like marimo's tables). It is an inset shadow on the
    right edge of a cell, so that it takes no width from the column and moves
    with a pinned cell; the last column has none, the box of .dt-scroll being
-   its edge. */
+   its edge. When the columns after it are hidden, datatable.js takes the
+   line from the last shown column. */
 .dt-table th:not(:last-child),
 .dt-table td:not(:last-child) {
   box-shadow: inset -1px 0 0 var(--dt-border);

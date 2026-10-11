@@ -535,10 +535,16 @@
     }
     const hidden = new Set(boxes.filter((box) => !box.checked).map((box) => box.dataset.dtShowColumn));
     const cells = [...root.querySelectorAll(".dt-table thead tr > th")];
-    const rules = cells
-      .map((cell, index) => [cell.querySelector("[data-dt-column]")?.dataset.dtColumn, index + 1])
+    const columns = cells.map((cell, index) => [cell.querySelector("[data-dt-column]")?.dataset.dtColumn, index + 1]);
+    const rules = columns
       .filter(([name]) => hidden.has(name))
       .map(([, child]) => `#${CSS.escape(root.id)} .dt-table tr > :nth-child(${child}) { display: none; }`);
+    // The last shown column has no line on its right when the columns after
+    // it are hidden, like the last column (see datatable.css).
+    const last = columns.filter(([name]) => !hidden.has(name)).at(-1)?.[1];
+    if (last !== undefined && last < cells.length) {
+      rules.push(`#${CSS.escape(root.id)} .dt-table tr > :nth-child(${last}) { box-shadow: none; }`);
+    }
     if (!sheet) {
       sheet = document.createElement("style");
       sheet.id = sheetId;

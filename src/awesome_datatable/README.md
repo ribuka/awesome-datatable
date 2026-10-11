@@ -250,9 +250,9 @@ header checkbox's matching keys, the export, and anything else built on
   `…`; with the pointer on it, its tooltip (`title`) shows it whole, except
   where the cell has the tooltip of `title_column`.
   - A thin line in the row lines' color (`--dt-border`) always separates
-    the columns, in the header and the body; the last column has none (the
-    table's box is its edge), and it is not doubled at the checkbox column
-    or the pinned columns.
+    the columns, in the header and the body; the last shown column has none
+    (the table's box is its edge), and it is not doubled at the checkbox
+    column or the pinned columns.
   - The right edge of each header is a handle (`[data-dt-resize]`, a
     focusable `separator` named `Resize column <label>`): on hover it shows
     the `col-resize` cursor; the column's line stays as it is on hover, on
