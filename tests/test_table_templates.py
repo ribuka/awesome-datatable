@@ -189,6 +189,23 @@ def test_fragment_puts_a_search_above_the_values_of_a_choice_column(
     assert re.search(r'data-dt-clear-filter data-dt-part="clear-\d+">', group)
 
 
+def test_fragment_puts_the_values_of_a_choice_column_in_a_div_of_the_fieldset(
+    environment: Environment, config: TableConfig, frame: pl.DataFrame
+) -> None:
+    """The values sit in a div of the fieldset, which Chrome parses fast however many they are."""
+    view = apply_state(frame, parse_state({}, config), config)
+
+    html = _render(environment, "{{ fragment(config, view) }}", config=config, view=view)
+
+    choices = re.search(
+        r'<fieldset class="dt-choices">\s*<legend>[^<]*</legend>\s*<div class="dt-choice-list">(.*?)</div>\s*</fieldset>',
+        _menu(html, "group"),
+        re.DOTALL,
+    )
+    assert choices is not None
+    assert re.findall(r'<label class="dt-choice"><input type="checkbox" name="t.eq__group" value="([^"]*)"', choices[1]) == ["a", "b"]
+
+
 def test_fragment_puts_apply_cancel_and_clear_under_the_filters(
     environment: Environment, config: TableConfig, frame: pl.DataFrame
 ) -> None:
