@@ -15,6 +15,7 @@ ORDER_PARAMETER = "order"
 PAGE_PARAMETER = "page"
 PAGE_SIZE_PARAMETER = "page_size"
 SEARCH_PARAMETER = "search"
+PARTS_PARAMETER = "parts"
 TEXT_PREFIX = "q__"
 EQUALS_PREFIX = "eq__"
 MIN_PREFIX = "min__"
@@ -54,6 +55,10 @@ class TableState:
     page_size : int | None, default None
         Rows per page chosen among ``TableConfig.page_size_choices``, or
         ``None`` for ``TableConfig.page_size``.
+    parts : bool, default False
+        Whether the response holds only the parts that ``datatable.js``
+        swaps after a reload of the table's own (``data-dt-part``), without
+        the toolbar and the column menus, which the page keeps.
     search : str, default ""
         Search of the whole table (``TableConfig.search``): words separated
         by whitespace that the row's ``pl.String`` columns must all contain,
@@ -75,6 +80,7 @@ class TableState:
     descending: bool = False
     page: int = 1
     page_size: int | None = None
+    parts: bool = False
     search: str = ""
     text: dict[str, str] = field(default_factory=dict)
     equals: dict[str, tuple[str, ...]] = field(default_factory=dict)
@@ -190,7 +196,8 @@ def parse_state(parameters: Mapping[str, Sequence[str]], config: TableConfig) ->
     Only parameters named ``<table_id>.<name>`` belong to the table; others
     are ignored, so several tables can share one query string. The names are
     ``sort``, ``order`` (``asc`` or ``desc``), ``page`` (a positive integer),
-    ``page_size`` (one of ``TableConfig.page_size_choices``), ``search`` (only with
+    ``page_size`` (one of ``TableConfig.page_size_choices``), ``parts``
+    (``1`` for only the swapped parts), ``search`` (only with
     ``TableConfig.search``), and, per filtered column, ``q__<column>`` (``"text"`` and
     ``"choice"``), ``eq__<column>``
     (``"choice"``; repeated once per value), ``min__<column>`` /
@@ -214,7 +221,7 @@ def parse_state(parameters: Mapping[str, Sequence[str]], config: TableConfig) ->
     ------
     ValueError
         If a parameter of the table is unknown (``search`` of a table
-        without the search box too), names a column without that filter, or has an unparsable value, sort column, order, page, or page size.
+        without the search box too), names a column without that filter, or has an unparsable value, sort column, order, page, page size, or parts.
     """
     every = {
         key.removeprefix(config.prefix): raw
@@ -229,7 +236,7 @@ def parse_state(parameters: Mapping[str, Sequence[str]], config: TableConfig) ->
     upper: dict[str, Bound] = {}
     nulls: dict[str, NullFilter] = {}
     for key, value in values.items():
-        if key in (SORT_PARAMETER, ORDER_PARAMETER, PAGE_PARAMETER):
+        if key in (SORT_PARAMETER, ORDER_PARAMETER, PAGE_PARAMETER, PARTS_PARAMETER):
             continue
         if key == PAGE_SIZE_PARAMETER and config.page_sizes:
             continue
@@ -271,6 +278,9 @@ def parse_state(parameters: Mapping[str, Sequence[str]], config: TableConfig) ->
     page_size = values.get(PAGE_SIZE_PARAMETER, "").strip()
     if page_size and page_size not in {str(size) for size in config.page_size_choices}:
         raise ValueError(f"invalid page size: {page_size!r}")
+    parts = values.get(PARTS_PARAMETER, "").strip()
+    if parts not in ("", "1"):
+        raise ValueError(f"invalid parts: {parts!r}")
 
     ranges = {
         name: (lower.get(name), upper.get(name))
@@ -282,6 +292,7 @@ def parse_state(parameters: Mapping[str, Sequence[str]], config: TableConfig) ->
         descending=order == "desc",
         page=int(page),
         page_size=int(page_size) if page_size else None,
+        parts=parts == "1",
         search=values.get(SEARCH_PARAMETER, "").strip(),
         text=text,
         equals=equals,

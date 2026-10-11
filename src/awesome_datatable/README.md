@@ -170,6 +170,7 @@ does not fit its column, or an unparsable value is a `ValueError`.
 | `order` | `asc` (default) or `desc`. |
 | `page` | 1-based page number; a page past the last shows the last. |
 | `page_size` | Rows per page, one of `page_size_choices` (`page_sizes` and `page_size`; only with `page_sizes`); default `page_size`. |
+| `parts` | `1` asks for only the parts that `datatable.js` swaps (`TableState.parts`): `fragment` then draws the `data-dt-part` elements and the headers' `aria-sort`, without the toolbar and the column menus. `datatable.js` sends it with its own reloads (`dt-reload`). |
 | `search` | Search of the whole table (only with `search=True`): every whitespace-separated word, in any order, ignoring case, as plain text, must be in some shown `pl.String` column of the row (`search_columns`; each word in any of them). Other types, `title_column`, and columns of the frame that are not shown are not searched; nulls hold no word. |
 | `q__<column>` | Search of a `"text"` or `"choice"` column: the value must contain every whitespace-separated word, in any order, ignoring case, as plain text (not a regular expression). `b01 lotA` matches `LotA_B01_run3`. |
 | `eq__<column>` | A value of a `"choice"` column, repeated for several (`?t.eq__lot=A&t.eq__lot=B`); a row matches any of them (`is_in`). |
@@ -182,7 +183,10 @@ matches, and `is_not_null` adds nothing. `is_null` alone lists the rows
 without a value; `is_not_null` alone drops them.
 
 The fragment carries these as inputs marked `data-dt-query` inside the
-container, which sends them with `hx-include="this"`. The table view, the
+container; `datatable.js` puts their applied values in each request of the
+container on `htmx:configRequest` (not htmx's `hx-include`, whose time grows
+with the square of the inputs, and a column menu can hold thousands of
+values). The table view, the
 header checkbox's matching keys, the export, and anything else built on
 `apply_state` filter and sort through the one `matching_rows`
 (`filter_expression`, the search of the whole table included, and
@@ -357,15 +361,19 @@ header checkbox's matching keys, the export, and anything else built on
   A focused control of a swapped part (a page button, for example) is
   focused again in the new part. The new rows show from the top of the
   scroll box (the sideways scroll stays); after a change of the rows per
-  page, the row that began the page shown is at the top, under the header. A reload triggered by the page (`triggers`,
-  such as a catalog update), or a response with other parts, swaps the whole
-  fragment with htmx.
+  page, the row that began the page shown is at the top, under the header.
+  These reloads ask for the parts only (`parts=1`), so the toolbar and the
+  column menus (with every value of the `"choice"` filters) are neither
+  drawn on the server nor sent and parsed again. A response whose parts do
+  not fit the table (columns changed since) loads the whole fragment instead
+  (`dt-refresh` on the container). A reload triggered by the page
+  (`triggers`, such as a catalog update) swaps the whole fragment with htmx.
 - A table drawn with the page (the container called with its first
   fragment) gets the remembered hidden columns, pinning, and column widths
   and shows the selection as soon as `datatable.js` runs, and one that htmx
   puts in the page later on its `htmx:load`, as a whole swap does.
-- While a reload is pending, the container has `htmx-request` and
-  `aria-busy="true"`: after 0.1 s the rows fade and a spinner turns over the
+- While a reload is pending, the container has `aria-busy="true"` (set
+  already in the click or key that reloads it) and `htmx-request`: after 0.1 s the rows fade and a spinner turns over the
   table, which keeps its height. Before the first fragment arrives, the
   spinner turns beside the container's "Loading…" (`.dt-loading`) instead.
   Both end with the request, also when it fails or is aborted.
@@ -427,7 +435,7 @@ container, so several tables can share a page.
 
 | Selector | Element |
 | --- | --- |
-| `.dt-root[data-datatable]` | Container (`id` = `table_id`); `data-dt-locked` when locked; `data-dt-pinned` while the left columns are pinned; `data-dt-max-selected` with the limit; `data-dt-export-url` with `export_url`; `data-dt-pin-preference` with `pin_preference`; `htmx-request` and `aria-busy` while reloading. |
+| `.dt-root[data-datatable]` | Container (`id` = `table_id`); `data-dt-locked` when locked; `data-dt-pinned` while the left columns are pinned; `data-dt-max-selected` with the limit; `data-dt-export-url` with `export_url`; `data-dt-pin-preference` with `pin_preference`; `aria-busy` and `htmx-request` while reloading. |
 | `[data-dt-part]` | A part of the fragment swapped after the table's own reloads (`state`, `rows`, `footer`, `matching`, `chips`, `limit`, `export-filtered`, and per column `sort-<n>`, `filtered-<n>`, `histogram-<n>`, `sorts-<n>`, `clear-<n>`). |
 | `.dt-state`, `.dt-chips-slot`, `.dt-filter-state` | Holders of the hidden sort / order / page inputs, of the chips, and of a column's filter mark (no box of their own). |
 | `.dt-scroll` / `.dt-table` | Scroll box with a fixed header / the table (`table-layout: fixed`). |
