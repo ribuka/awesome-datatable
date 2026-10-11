@@ -194,7 +194,10 @@ header checkbox's matching keys, the export, and anything else built on
 
 ## Browser behavior and events
 
-- Above the table, by the settings:
+- Above the table, by the settings: the filter chips (`filter_chips`) on
+  top, then a line (`.dt-toolbar`) with the search box, which fills the
+  width left, and at its right end the `Columns`, `Pin columns`, and
+  `Export` buttons (`.dt-toolbar-actions`).
   - `search`: a search box (`Search…`, named `Search`). Typing reloads the
     first page after 300 ms; the box keeps its text, focus, and caret across
     reloads (`hx-preserve`).
@@ -318,10 +321,15 @@ header checkbox's matching keys, the export, and anything else built on
 - Clicking the column name (or Enter / Space on it) opens the column menu,
   a popover (`popover`, `popovertarget`) holding the column's controls:
   sort (Asc, Desc, Clear sort), the filter (search, search above values
-  with their counts, or lower and upper bounds), the null filter (Any, Is null, Is not
-  null, with the null count), "Copy column name" (the frame's column
-  name), and under a column with filters the `Apply` (✓), `Cancel` (×), and
-  `Clear` (trash) buttons. A click outside or Escape closes it and returns
+  with their counts, or lower and upper bounds), the null filter (a
+  segmented control of the Any, Is null, and Is not null buttons, the chosen
+  one `aria-pressed="true"`, with the null count; the choice is kept in the
+  hidden query input `null__<column>`), "Copy column name" (the frame's
+  column name), and under a column with filters the icon buttons `Apply` (a
+  blue ✓, named `Apply filters`), `Cancel` (a gray ×), and `Clear` (a red
+  trash can, named `Clear the filters of this column`), without a border or
+  a background, each named by its `aria-label` and `title`. The buttons of a
+  menu are a tenth lower than the page's. A click outside or Escape closes it and returns
   the focus to the column name; Tab moves from the name into the menu. The
   popover is in the top layer, so neither the scroll box nor a `<dialog>`
   clips it; `datatable.js` places it under the column name (above it, or
@@ -330,8 +338,9 @@ header checkbox's matching keys, the export, and anything else built on
 - The filters of a column menu (search, values, bounds, null filter) are a
   draft until applied: changing them reloads nothing.
   - While the draft differs from the applied filters, `Apply` is enabled
-    and stands out (`data-dt-dirty` on the menu) and the menu shows
-    `Unapplied changes` (a `status`); otherwise `Apply` is disabled.
+    (`data-dt-dirty` on the menu) and the menu shows `Unapplied changes`
+    (a `status`) beside the buttons; otherwise `Apply` is disabled. A
+    disabled button is faded.
   - `Apply`, or Enter in the search or a bound, reloads the first page once
     with the draft and closes the menu.
   - `Cancel`, Escape, a click outside, or opening another menu drops the
@@ -405,7 +414,9 @@ header checkbox's matching keys, the export, and anything else built on
   type match; give the initial selection in the same form. A table without
   selection does not cast its keys (`data-dt-key` is `str()` of the value).
   The header checkbox selects or clears every row matching the applied
-  filters (not a draft in a column menu) and shows all / some / none.
+  filters (not a draft in a column menu) and shows all / some / none. A
+  click anywhere in its cell toggles it once; while it is disabled (past the
+  limit, or a locked table) a click in the cell does nothing.
 - A click anywhere on a row toggles its checkbox, once (a click on the
   checkbox itself is not counted twice). Clicks on a link or another control
   in the row (`a`, `button`, `input`, `select`, `textarea`, `label`,
@@ -457,14 +468,16 @@ container, so several tables can share a page.
 | `.dt-histogram[data-dt-histogram]`, `.dt-bins`, `.dt-bin`, `.dt-bin-bar`, `.dt-bin-hit`, `.dt-ticks` | A column's histogram: the SVG (`role="img"`, named `Histogram of <label>, <min> to <max>`), a bin (`<g>` with its `<title>`), its bar and its full-height hover area, and the smallest and largest value. |
 | `.dt-top-values[data-dt-top-values]`, `.dt-top-value`, `.dt-top-bar`, `.dt-top-label`, `.dt-top-others` | Most frequent values (a list named `Most frequent values of <label>`), a value with its bar, text, and `.dt-count`, and the `Others` line. |
 | `.dt-out` | A bin outside the bounds in use, or a value not checked, shown faded. |
-| `.dt-toolbar` | Line above the table holding the search box and the `Columns`, `Pin columns`, and `Export` buttons. |
+| `.dt-toolbar`, `.dt-toolbar-actions` | Line above the table (under the chips) holding the search box, and the group of the `Columns`, `Pin columns`, and `Export` buttons at its right end. |
 | `.dt-search` | Search box of the whole table (`id` `<table_id>-search`). |
 | `.dt-columns-button`, `.dt-menu[data-dt-columns-menu]`, `[data-dt-show-column]` | `Columns` button, its menu (`id` `<table_id>-columns-menu`, named `Columns`), and the checkbox of each column. |
 | `.dt-pin-button[data-dt-pin-toggle]`, `.dt-switch` | `Pin columns` toggle (`aria-pressed`) and its switch. |
 | `.dt-export-button`, `.dt-menu[data-dt-export-menu]`, `.dt-export-rows`, `.dt-export-label`, `[data-dt-export][data-dt-export-rows]`, `[data-dt-export-selected-count]`, `.dt-export-error[data-dt-export-error]` | `Export` button, its menu (`id` `<table_id>-export-menu`, named `Export`), a group of rows (named `Filtered rows` / `Selected rows`) with its label and count, a download button (`csv` or `parquet`, `filtered` or `selected`, named `Export <rows> as <format>`), the selected count, and the failure notice (`role="alert"`). |
 | `.dt-chips`, `.dt-chip`, `.dt-chip-label`, `[data-dt-remove-filter]` | List of the filters in use (named `Filters in use`), a chip, its text, and its × button (a JSON array of the parameter names it clears). |
 | `.dt-menu[popover][data-dt-menu]` | A menu: a column's (`id` `<table_id>-menu-<n>`, `role="dialog"`, named `<label> menu`, `data-dt-menu` = the column name) or the `Columns` or `Export` menu (empty `data-dt-menu`); `data-dt-placed` once placed. |
-| `.dt-menu-section`, `.dt-sorts`, `.dt-filter`, `.dt-choices`, `.dt-choice-list`, `.dt-choice`, `.dt-nulls`, `.dt-count` | Menu parts: sort buttons (`[data-dt-sort][data-dt-order]`, `aria-pressed`), the filter, the value list (its fieldset and the `<div>` holding the values), a value, the null filter, and counts. |
+| `.dt-menu-section`, `.dt-sorts`, `.dt-filter`, `.dt-choices`, `.dt-choice-list`, `.dt-choice`, `.dt-count` | Menu parts: sort buttons (`[data-dt-sort][data-dt-order]`, `aria-pressed`), the filter, the value list (its fieldset and the `<div>` holding the values), a value, and counts. |
+| `.dt-nulls`, `.dt-nulls-label`, `[data-dt-null-value]`, `.dt-segmented`, `[data-dt-null]` | The null filter: its label with the null count, the hidden query input holding the choice, and the segmented control (`role="group"`) of its buttons (`aria-pressed`; `data-dt-null` is the value: empty, `is_null`, or `is_not_null`). |
+| `.dt-filter-actions`, `.dt-draft-status[data-dt-draft-status]`, `.dt-icon-button`, `.dt-apply[data-dt-apply]`, `.dt-cancel[data-dt-cancel]`, `.dt-clear-filter[data-dt-clear-filter]` | Under the filters of a column menu: the notice of unapplied changes and the `Apply filters`, `Cancel`, and `Clear the filters of this column` icon buttons. |
 | `[data-dt-copy]` | "Copy column name" button. |
 | `.dt-check`, `[data-dt-check-all]`, `[data-dt-row-check]` | Selection checkboxes. |
 | `.dt-pinned` | Cells of the checkbox column and the first column; the checkbox column (`.dt-check`) is always pinned at the left, the first column while the container has `data-dt-pinned`. |
@@ -488,7 +501,8 @@ container or an ancestor fixes the scheme.
 | `--dt-border` | Lines between rows and between columns, and box borders. |
 | `--dt-bg` | Background of the pinned cells, which cover the cells scrolled under them. |
 | `--dt-header-bg`, `--dt-row-hover-bg`, `--dt-row-selected-bg` | Header, hovered row, and selected row backgrounds. |
-| `--dt-accent` | Sort and filter marks, the chosen sort in a menu, and the `Pin columns` switch while on. |
+| `--dt-accent`, `--dt-accent-soft` | Sort and filter marks, the chosen sort and null filter in a menu, the `Apply` icon, and the `Pin columns` switch while on; the background of the chosen null filter. |
+| `--dt-danger` | The `Clear` icon of a column menu. |
 | `--dt-radius` | Box corner radius. |
 | `--dt-font`, `--dt-font-size` | Font family and table font size. |
 | `--dt-cell-padding` | Cell padding. |
@@ -499,7 +513,7 @@ container or an ancestor fixes the scheme.
 | `--dt-filter-max-width` | Width limit of the filter inputs. |
 | `--dt-mono-font` | Font of the column types. |
 | `--dt-menu-bg`, `--dt-menu-shadow`, `--dt-menu-max-width` | Menu background, shadow, and width limit. |
-| `--dt-search-width` | Width of the search box. |
+| `--dt-search-width` | Narrowest width of the search box, which fills the width left, before the buttons move to the next line. |
 | `--dt-chip-bg` | Background of the filter chips. |
 | `--dt-histogram-width`, `--dt-histogram-height` | Width of a histogram or of the top values (fixed, whatever the column's width), and height of a histogram's bars. |
 | `--dt-histogram-fg`, `--dt-histogram-out-opacity` | Color of the bars, and opacity of the faded ones. |

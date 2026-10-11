@@ -136,6 +136,17 @@
     }
   });
 
+  // A click anywhere in the header checkbox's cell toggles the checkbox,
+  // unless it is disabled; a click on the checkbox itself toggles it once,
+  // by the browser.
+  document.addEventListener("click", (event) => {
+    const cell = event.target.closest?.(".dt-table thead th.dt-check");
+    const box = cell?.querySelector("[data-dt-check-all]");
+    if (box && event.target !== box && !box.disabled && tableOf(cell)) {
+      box.click();
+    }
+  });
+
   // The row last clicked (its key) in each table: the start of a range
   // that Shift + click selects.
   const rangeAnchors = new WeakMap();
@@ -214,11 +225,11 @@
   });
 
   function isChosen(control) {
-    return control.type === "checkbox" || control.type === "radio";
+    return control.type === "checkbox";
   }
 
   // Returns the values of query controls as they would be sent: unchecked
-  // boxes and radios are left out.
+  // boxes are left out.
   function fieldsOf(controls) {
     const fields = new URLSearchParams();
     for (const control of controls) {
@@ -347,7 +358,7 @@
 
   // Typing in the search box of the whole table reloads the first page
   // after a pause. The filters of the column menus wait for Apply (below).
-  const TYPED_QUERY = "input[data-dt-query]:not([type='checkbox'], [type='radio'])";
+  const TYPED_QUERY = "input[data-dt-query]:not([type='checkbox'], [type='hidden'])";
 
   document.addEventListener("input", (event) => {
     const root = tableOf(event.target);
@@ -434,12 +445,36 @@
   function clearControl(control) {
     if (control.type === "checkbox") {
       control.checked = false;
-    } else if (control.type === "radio") {
-      control.checked = control.value === "";
     } else {
       control.value = "";
+      syncNullButtons(control);
     }
   }
+
+  // Shows the choice of a null filter (its hidden input,
+  // `[data-dt-null-value]`) on its segmented buttons (`aria-pressed`).
+  function syncNullButtons(input) {
+    if (!input.matches("[data-dt-null-value]")) {
+      return;
+    }
+    for (const button of input.parentElement.querySelectorAll("[data-dt-null]")) {
+      button.setAttribute("aria-pressed", String(button.dataset.dtNull === input.value));
+    }
+  }
+
+  // A button of a null filter chooses its value, as a draft of the column
+  // menu until Apply.
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest?.("[data-dt-null]");
+    const input = button?.closest(".dt-nulls")?.querySelector("[data-dt-null-value]");
+    const menu = button?.closest("[data-dt-menu]");
+    if (!input || !menu || !tableOf(menu)) {
+      return;
+    }
+    input.value = button.dataset.dtNull;
+    syncNullButtons(input);
+    syncDraft(menu);
+  });
 
   // A chip of a filter in use clears the controls of its parameters
   // (`data-dt-remove-filter`, a JSON array of names) and reloads the first
@@ -977,6 +1012,7 @@
         control.checked = fields.getAll(control.name).includes(control.value);
       } else {
         control.value = fields.get(control.name) ?? "";
+        syncNullButtons(control);
       }
     }
   }
