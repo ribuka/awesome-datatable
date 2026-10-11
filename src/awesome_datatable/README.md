@@ -249,9 +249,14 @@ header checkbox's matching keys, the export, and anything else built on
   `--dt-col-width`. A value (or a column name) wider than its column ends in
   `…`; with the pointer on it, its tooltip (`title`) shows it whole, except
   where the cell has the tooltip of `title_column`.
+  - A thin line in the row lines' color (`--dt-border`) always separates
+    the columns, in the header and the body; the last column has none (the
+    table's box is its edge), and it is not doubled at the checkbox column
+    or the pinned columns.
   - The right edge of each header is a handle (`[data-dt-resize]`, a
     focusable `separator` named `Resize column <label>`): on hover it shows
-    the `col-resize` cursor and an accent edge. Dragging it resizes the
+    the `col-resize` cursor; the column's line stays as it is on hover, on
+    focus, and while dragged. Dragging it resizes the
     column, live while dragging; double-clicking it fits the column to its
     header (name and marks, type, histogram) and the values of the rows shown
     on the page; ←/→ while it is focused narrow or widen the column by 10 px.
@@ -459,7 +464,7 @@ container or an ancestor fixes the scheme.
 | Variable | Use |
 | --- | --- |
 | `--dt-fg`, `--dt-muted` | Text, and headers / the footer texts / locked rows / the limit notice. |
-| `--dt-border` | Cell and box borders. |
+| `--dt-border` | Lines between rows and between columns, and box borders. |
 | `--dt-bg` | Background of the pinned cells, which cover the cells scrolled under them. |
 | `--dt-header-bg`, `--dt-row-hover-bg`, `--dt-row-selected-bg` | Header, hovered row, and selected row backgrounds. |
 | `--dt-accent` | Sort and filter marks, the chosen sort in a menu, and the `Pin columns` switch while on. |
