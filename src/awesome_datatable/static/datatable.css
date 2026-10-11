@@ -39,6 +39,14 @@
   --dt-histogram-height: 2rem;
   --dt-histogram-fg: #7a9cc6;
   --dt-histogram-out-opacity: 0.3;
+  /* Time of one turn of the reload spinner; slower with reduced motion. */
+  --dt-spin-duration: 0.8s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.dt-root) {
+    --dt-spin-duration: 1.6s;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -707,7 +715,8 @@
 
 /* While the table reloads (`aria-busy`), its rows fade and a spinner
    turns over them, both only after a moment so that a quick reload does not
-   flicker. */
+   flicker. The spinner turns with reduced motion too (more slowly, see
+   --dt-spin-duration): a still one would look like a hung page. */
 .dt-root[aria-busy="true"] .dt-scroll {
   opacity: 0.55;
   transition: opacity 0.15s 0.1s;
@@ -727,7 +736,7 @@
   content: "";
   pointer-events: none;
   opacity: 0;
-  animation: dt-spin 0.8s linear infinite, dt-appear 0s 0.1s forwards;
+  animation: dt-spin var(--dt-spin-duration) linear infinite, dt-appear 0s 0.1s forwards;
 }
 
 /* Before the first fragment arrives, the spinner turns beside "Loading…"
@@ -748,7 +757,7 @@
   vertical-align: -0.15em;
   content: "";
   opacity: 0;
-  animation: dt-spin 0.8s linear infinite, dt-appear 0s 0.1s forwards;
+  animation: dt-spin var(--dt-spin-duration) linear infinite, dt-appear 0s 0.1s forwards;
 }
 
 @keyframes dt-spin {
@@ -760,12 +769,5 @@
 @keyframes dt-appear {
   to {
     opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dt-root[aria-busy="true"]::after,
-  .dt-root[aria-busy="true"] > .dt-loading::before {
-    animation: dt-appear 0s 0.1s forwards;
   }
 }

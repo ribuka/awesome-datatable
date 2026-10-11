@@ -377,6 +377,13 @@ header checkbox's matching keys, the export, and anything else built on
   table, which keeps its height. Before the first fragment arrives, the
   spinner turns beside the container's "Loading…" (`.dt-loading`) instead.
   Both end with the request, also when it fails or is aborted.
+  The spinner makes one turn in `--dt-spin-duration` (0.8 s); with
+  `prefers-reduced-motion: reduce` it turns more slowly (1.6 s) instead of
+  stopping, since a still spinner looks like a hung page.
+- The values of a choice filter sit in a `<div>` (`.dt-choice-list`)
+  inside the menu's `<fieldset class="dt-choices">`, not directly in it:
+  Chrome parses a `<fieldset>` with many children in time quadratic in
+  their number (20,000 values took 11 s; in a `<div>`, 0.1 s).
 - Under the table, the footer shows "N rows, M columns" (the rows matching
   the filters and the shown columns), for a selectable table the selection
   count ("k selected", or "k / max selected" with `max_selected`) and Clear
@@ -455,7 +462,7 @@ container, so several tables can share a page.
 | `.dt-export-button`, `.dt-menu[data-dt-export-menu]`, `.dt-export-rows`, `.dt-export-label`, `[data-dt-export][data-dt-export-rows]`, `[data-dt-export-selected-count]`, `.dt-export-error[data-dt-export-error]` | `Export` button, its menu (`id` `<table_id>-export-menu`, named `Export`), a group of rows (named `Filtered rows` / `Selected rows`) with its label and count, a download button (`csv` or `parquet`, `filtered` or `selected`, named `Export <rows> as <format>`), the selected count, and the failure notice (`role="alert"`). |
 | `.dt-chips`, `.dt-chip`, `.dt-chip-label`, `[data-dt-remove-filter]` | List of the filters in use (named `Filters in use`), a chip, its text, and its × button (a JSON array of the parameter names it clears). |
 | `.dt-menu[popover][data-dt-menu]` | A menu: a column's (`id` `<table_id>-menu-<n>`, `role="dialog"`, named `<label> menu`, `data-dt-menu` = the column name) or the `Columns` or `Export` menu (empty `data-dt-menu`); `data-dt-placed` once placed. |
-| `.dt-menu-section`, `.dt-sorts`, `.dt-filter`, `.dt-choices`, `.dt-choice`, `.dt-nulls`, `.dt-count` | Menu parts: sort buttons (`[data-dt-sort][data-dt-order]`, `aria-pressed`), the filter, the value list, the null filter, and counts. |
+| `.dt-menu-section`, `.dt-sorts`, `.dt-filter`, `.dt-choices`, `.dt-choice-list`, `.dt-choice`, `.dt-nulls`, `.dt-count` | Menu parts: sort buttons (`[data-dt-sort][data-dt-order]`, `aria-pressed`), the filter, the value list (its fieldset and the `<div>` holding the values), a value, the null filter, and counts. |
 | `[data-dt-copy]` | "Copy column name" button. |
 | `.dt-check`, `[data-dt-check-all]`, `[data-dt-row-check]` | Selection checkboxes. |
 | `.dt-pinned` | Cells of the checkbox column and the first column, pinned at the left while the container has `data-dt-pinned`. |

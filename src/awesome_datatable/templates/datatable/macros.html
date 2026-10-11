@@ -66,14 +66,19 @@
       {% set values = view.options.get(column.name, []) %}
       {% set chosen = view.state.equals.get(column.name, ()) %}
       {% set counts = view.counts.values.get(column.name, {}) %}
+      {#- The values sit in a <div>, not directly in the <fieldset>: Chrome
+          parses a fieldset with many children in time quadratic in their
+          number (20,000 values took 11 s; in a <div>, 0.1 s). -#}
       <fieldset class="dt-choices">
         <legend>{{ column.filter_name }}</legend>
+        <div class="dt-choice-list">
         {% for value in values + (chosen|reject("in", values)|list) %}
           <label class="dt-choice"><input type="checkbox" name="{{ name }}" value="{{ value }}" data-dt-query{% if value in chosen %} checked{% endif %}>
             <span class="dt-choice-value">{{ value }}</span> <span class="dt-count">{{ counts.get(value, 0) }}</span></label>
         {% else %}
           <p class="dt-empty">No values</p>
         {% endfor %}
+        </div>
       </fieldset>
     {% else %}
       {% set input_type = "datetime-local" if column.filter == "datetime" else "number" %}
