@@ -675,6 +675,22 @@ def test_container_carries_the_export_url(environment: Environment, config: Tabl
     assert "data-dt-export-url" not in _render(environment, "{{ container(config) }}", config=config)
 
 
+def test_container_carries_the_shared_pin_preference(
+    environment: Environment, config: TableConfig
+) -> None:
+    """A table sharing another table's "Pin columns" choice names that table; others name none."""
+    shared = _render(
+        environment, "{{ container(config) }}", config=replace(config, pin_preference="files")
+    )
+
+    container = re.search(r'<div id="t"[^>]*>', shared)
+    assert container is not None
+    assert 'data-dt-pin-preference="files"' in container[0]
+    assert "data-dt-pin-preference" not in _render(
+        environment, "{{ container(config) }}", config=config
+    )
+
+
 def test_fragment_has_an_export_menu_of_the_filtered_and_selected_rows(
     environment: Environment, config: TableConfig, frame: pl.DataFrame
 ) -> None:

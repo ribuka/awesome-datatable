@@ -20,6 +20,7 @@
      {%- if config.selectable %} data-dt-selection="{{ config.table_id }}-selection"{% endif %}
      {%- if config.max_selected is not none %} data-dt-max-selected="{{ config.max_selected }}"{% endif %}
      {%- if config.export_url %} data-dt-export-url="{{ config.export_url }}"{% endif %}
+     {%- if config.pin_preference %} data-dt-pin-preference="{{ config.pin_preference }}"{% endif %}
      {%- if locked %} data-dt-locked{% endif %}>
   {%- if caller is defined %}
   {{ caller() }}

@@ -121,7 +121,12 @@ class TableConfig:
         Whether a "Pin columns" toggle above the table pins the checkbox
         column and the first column at the left while the table scrolls
         sideways. Pinning is off until turned on; the browser remembers the
-        choice per ``table_id``. Without the toggle nothing is pinned.
+        choice per ``table_id``, or per ``pin_preference``. Without the
+        toggle nothing is pinned.
+    pin_preference : str | None, default None
+        Table id whose "Pin columns" choice the table shares, so that the
+        same rows shown in another table are pinned alike; ``None`` for the
+        table's own ``table_id``.
     histograms : bool, default False
         Whether each header shows the distribution of its column over every
         row of the frame (``column_histograms``): a histogram of a number,
@@ -153,6 +158,7 @@ class TableConfig:
     filter_chips: bool = False
     column_chooser: bool = False
     pin_toggle: bool = False
+    pin_preference: str | None = None
     histograms: bool = False
     export_url: str | None = None
     export_name: str = "table"

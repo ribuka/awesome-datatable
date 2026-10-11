@@ -465,11 +465,13 @@
   // (`name` is the kind of choice): kept in localStorage under
   // `datatable:<name>:<table_id>` as JSON, and in memory (`preferences`),
   // so a choice holds across reloads until the page is left even where the
-  // storage cannot be read or written.
+  // storage cannot be read or written. A table may share the "Pin columns"
+  // choice of another table (`data-dt-pin-preference` names its id).
   const preferences = new Map();
 
   function preferenceKey(root, name) {
-    return `datatable:${name}:${root.id}`;
+    const id = name === "pinned-columns" ? (root.dataset.dtPinPreference ?? root.id) : root.id;
+    return `datatable:${name}:${id}`;
   }
 
   // Returns the remembered choice, or `fallback` when there is none or

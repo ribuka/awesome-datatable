@@ -74,6 +74,7 @@ Update this document whenever the component gains a feature.
        filter_chips=True,             # chips of the filters in use
        column_chooser=True,           # "Columns" menu showing or hiding columns
        pin_toggle=True,               # "Pin columns" toggle pinning the left columns
+       pin_preference=None,           # table id sharing its "Pin columns" choice
        histograms=True,               # distribution of each column in its header
        export_url="/catalog/files/export",  # "Export" menu; None for none
        export_name="catalog",         # exported files: catalog_<time>.csv
@@ -208,7 +209,9 @@ header checkbox's matching keys, the export, and anything else built on
     header stays on top of them. Pinning is off until the toggle turns it
     on. Click, or Space / Enter on the focused button, switches it; it has
     no shortcut key of its own. The choice is kept in `localStorage` under
-    `datatable:pinned-columns:<table_id>` (`true` or `false`) and shown again
+    `datatable:pinned-columns:<table_id>` (`true` or `false`; with
+    `pin_preference`, under that table id instead, so that the table shares
+    the choice of that table) and shown again
     after every reload (`data-dt-pinned` on the container, which the reloads
     keep, so the table does not jump). Without storage it lasts until the
     page is left, like the hidden columns. A table without the toggle pins
@@ -423,7 +426,7 @@ container, so several tables can share a page.
 
 | Selector | Element |
 | --- | --- |
-| `.dt-root[data-datatable]` | Container (`id` = `table_id`); `data-dt-locked` when locked; `data-dt-pinned` while the left columns are pinned; `data-dt-max-selected` with the limit; `data-dt-export-url` with `export_url`; `htmx-request` and `aria-busy` while reloading. |
+| `.dt-root[data-datatable]` | Container (`id` = `table_id`); `data-dt-locked` when locked; `data-dt-pinned` while the left columns are pinned; `data-dt-max-selected` with the limit; `data-dt-export-url` with `export_url`; `data-dt-pin-preference` with `pin_preference`; `htmx-request` and `aria-busy` while reloading. |
 | `[data-dt-part]` | A part of the fragment swapped after the table's own reloads (`state`, `rows`, `footer`, `matching`, `chips`, `limit`, `export-filtered`, and per column `sort-<n>`, `filtered-<n>`, `histogram-<n>`, `sorts-<n>`, `clear-<n>`). |
 | `.dt-state`, `.dt-chips-slot`, `.dt-filter-state` | Holders of the hidden sort / order / page inputs, of the chips, and of a column's filter mark (no box of their own). |
 | `.dt-scroll` / `.dt-table` | Scroll box with a fixed header / the table (`table-layout: fixed`). |
