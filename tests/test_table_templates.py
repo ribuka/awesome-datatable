@@ -144,6 +144,32 @@ def test_fragment_opens_a_menu_from_each_column_name(
     assert 'data-dt-sort="" data-dt-order="asc" disabled>Clear sort' in _menu(html, "score")
 
 
+def _null_choice(menu: str) -> tuple[str, str]:
+    """Return the hidden null filter value of a menu and its pressed button's value."""
+    hidden = re.search(r'<input type="hidden" name="t.null__[^"]*" value="([^"]*)" data-dt-query data-dt-null-value>', menu)
+    pressed = re.findall(r'data-dt-null="([^"]*)" aria-pressed="true"', menu)
+    assert hidden is not None
+    assert len(pressed) == 1
+    return hidden[1], pressed[0]
+
+
+def test_fragment_draws_the_null_filter_as_a_segmented_control(
+    environment: Environment, config: TableConfig, frame: pl.DataFrame
+) -> None:
+    """The null filter is a group of Any / Is null / Is not null buttons named by its label."""
+    view = apply_state(frame, parse_state({"t.null__group": ["is_null"]}, config), config)
+
+    html = _render(environment, "{{ fragment(config, view) }}", config=config, view=view)
+
+    group = _menu(html, "group")
+    label = re.search(r'<span class="dt-nulls-label" id="(t-nulls-\d+)">Null values', group)
+    assert label is not None
+    assert f'<div class="dt-segmented" role="group" aria-labelledby="{label[1]}">' in group
+    buttons = re.findall(r'<button type="button" data-dt-null="([^"]*)" aria-pressed="(true|false)">([^<]*)</button>', group)
+    assert buttons == [("", "false", "Any"), ("is_null", "true", "Is null"), ("is_not_null", "false", "Is not null")]
+    assert 'type="radio"' not in html
+
+
 def test_fragment_shows_choice_and_null_counts_and_filter_marks(
     environment: Environment, config: TableConfig, frame: pl.DataFrame
 ) -> None:
@@ -162,10 +188,8 @@ def test_fragment_shows_choice_and_null_counts_and_filter_marks(
     )
     assert values == [("a", "", "2"), ("b", " checked", "1"), ("gone", " checked", "0")]
     assert 'Null values <span class="dt-count">1</span>' in group
-    when = _menu(html, "when")
-    assert 'name="t.null__when" value="is_not_null" data-dt-query checked>' in when
-    assert 'name="t.null__when" value="" data-dt-query>' in when
-    assert 'name="t.null__count" value="" data-dt-query checked>' in _menu(html, "count")
+    assert _null_choice(_menu(html, "when")) == ("is_not_null", "is_not_null")
+    assert _null_choice(_menu(html, "count")) == ("", "")
     marked = [
         column.name for column in config.columns if "data-dt-filtered" in _header(html, column.name)
     ]
@@ -217,8 +241,11 @@ def test_fragment_puts_apply_cancel_and_clear_under_the_filters(
 
     for column in config.columns:
         menu = _menu(html, column.name)
-        assert ("data-dt-apply disabled>" in menu) == (column.filter is not None)
-        assert ("data-dt-cancel>" in menu) == (column.filter is not None)
+        assert ('title="Apply filters" aria-label="Apply filters" data-dt-apply disabled>' in menu) == (column.filter is not None)
+        assert ('title="Cancel" aria-label="Cancel" data-dt-cancel>' in menu) == (column.filter is not None)
+        assert (
+            'title="Clear the filters of this column" aria-label="Clear the filters of this column" data-dt-clear-filter' in menu
+        ) == (column.filter is not None)
         assert ("data-dt-draft-status hidden>Unapplied changes" in menu) == (column.filter is not None)
         if column.filter is not None:
             assert menu.index("data-dt-copy=") < menu.index("data-dt-apply")
@@ -534,6 +561,28 @@ def test_fragment_shows_the_search_box_with_the_search(
     assert 'aria-label="Search"' in search[0]
     assert "data-dt-query hx-preserve" in search[0]
     assert html.index('id="t-search"') < html.index('<table class="dt-table">')
+
+
+def test_fragment_puts_the_chips_above_the_search_box_and_the_buttons_at_its_right(
+    environment: Environment, config: TableConfig, frame: pl.DataFrame
+) -> None:
+    """The chips come first, then the search box, then the group of Columns, Pin columns, and Export."""
+    full = replace(
+        config, search=True, filter_chips=True, column_chooser=True, pin_toggle=True, export_url="/table/export"
+    )
+    view = apply_state(frame, parse_state({"t.eq__group": ["a"]}, full), full)
+
+    html = _render(environment, "{{ fragment(config, view) }}", config=full, view=view)
+
+    toolbar = html.index('<div class="dt-toolbar">')
+    actions = html.index('<div class="dt-toolbar-actions">')
+    assert html.index('data-dt-part="chips"') < toolbar < html.index('id="t-search"') < actions
+    assert actions < html.index("dt-columns-button") < html.index("data-dt-pin-toggle") < html.index("dt-export-button")
+    search_only = replace(config, search=True)
+    plain = _render(
+        environment, "{{ fragment(config, view) }}", config=search_only, view=apply_state(frame, TableState(), search_only)
+    )
+    assert "dt-toolbar-actions" not in plain
 
 
 def test_fragment_lists_the_filters_in_use_as_chips(

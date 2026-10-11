@@ -22,6 +22,8 @@
   --dt-col-width: 12rem;
   --dt-col-min-width: calc(var(--dt-histogram-width) + 1.5rem);
   --dt-accent: #1a73e8;
+  --dt-accent-soft: #e8f0fe;
+  --dt-danger: #c62828;
   --dt-radius: 8px;
   --dt-font: inherit;
   --dt-font-size: 0.875rem;
@@ -59,6 +61,8 @@
     --dt-row-hover-bg: #1c2128;
     --dt-row-selected-bg: #1b2a40;
     --dt-accent: #4c9aff;
+    --dt-accent-soft: #1b2a40;
+    --dt-danger: #f47067;
     --dt-menu-bg: #1c2128;
     --dt-menu-shadow: 0 4px 16px rgb(0 0 0 / 0.5);
     --dt-chip-bg: #21262d;
@@ -75,6 +79,8 @@
   --dt-row-hover-bg: #1c2128;
   --dt-row-selected-bg: #1b2a40;
   --dt-accent: #4c9aff;
+  --dt-accent-soft: #1b2a40;
+  --dt-danger: #f47067;
   --dt-menu-bg: #1c2128;
   --dt-menu-shadow: 0 4px 16px rgb(0 0 0 / 0.5);
   --dt-chip-bg: #21262d;
@@ -95,8 +101,10 @@
   color: var(--dt-muted);
 }
 
-/* Above the table: the search box, the "Columns" and "Pin columns"
-   buttons, the "Export" button, and the chips of the filters in use. */
+/* Above the table, under the chips of the filters in use: the search box,
+   filling the width left (never narrower than --dt-search-width), and at
+   the right the "Columns" and "Pin columns" buttons and the "Export"
+   button. */
 .dt-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -107,11 +115,20 @@
 }
 
 .dt-search {
+  flex: 1 1 var(--dt-search-width);
   box-sizing: border-box;
-  width: var(--dt-search-width);
+  min-width: 0;
   max-width: 100%;
   min-height: 1.75rem;
   padding: 0.15rem 0.4rem;
+}
+
+.dt-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+  align-items: center;
+  margin-left: auto;
 }
 
 .dt-columns-button,
@@ -503,6 +520,13 @@
   border-top: none;
 }
 
+/* The buttons of a menu are a tenth lower than the page's buttons
+   (0.4rem of padding above and below and a line height of 1.6). */
+.dt-menu button {
+  padding-block: 0.35rem;
+  line-height: 1.45;
+}
+
 .dt-menu legend {
   margin-bottom: 0.15rem;
   padding: 0;
@@ -538,26 +562,51 @@
   color: var(--dt-muted);
 }
 
-/* Apply, Cancel, and Clear under the filters of a column menu. Apply
-   stands out while the filters differ from those applied (data-dt-dirty),
-   with the notice of unapplied changes above the buttons. */
+/* Apply (blue), Cancel (gray), and Clear (red) under the filters of a
+   column menu: small icons without a border or a background, at the right
+   of the notice of unapplied changes. A disabled one is faded. */
+.dt-filter-actions {
+  flex-direction: row;
+  align-items: center;
+}
+
 .dt-filter-buttons {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
+  gap: 0.15rem;
+  margin-left: auto;
 }
 
-.dt-filter-buttons button {
+.dt-menu .dt-icon-button {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  justify-content: center;
+  padding: 0.2rem;
+  border: none;
+  border-radius: 4px;
+  line-height: 1;
+  background: none;
+  cursor: pointer;
 }
 
-.dt-menu[data-dt-dirty] .dt-apply {
-  border-color: var(--dt-accent);
-  color: #ffffff;
-  background: var(--dt-accent);
-  font-weight: 600;
+.dt-menu .dt-icon-button:hover:not(:disabled) {
+  background: var(--dt-chip-bg);
+}
+
+.dt-menu .dt-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.dt-apply {
+  color: var(--dt-accent);
+}
+
+.dt-cancel {
+  color: var(--dt-muted);
+}
+
+.dt-clear-filter {
+  color: var(--dt-danger);
 }
 
 .dt-draft-status {
@@ -572,26 +621,51 @@
   padding: 0.15rem 0.4rem;
 }
 
-.dt-choices,
-.dt-nulls {
+.dt-choices {
+  max-height: 14rem;
   margin: 0;
   padding: 0;
+  overflow: auto;
   border: none;
 }
 
-.dt-choices {
-  max-height: 14rem;
-  overflow: auto;
+.dt-nulls-label {
+  color: var(--dt-muted);
 }
 
-.dt-nulls {
+/* The null filter: buttons joined side by side, the chosen one
+   (`aria-pressed`) on the accent color. */
+.dt-segmented {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
 }
 
-.dt-choice,
-.dt-nulls label {
+.dt-segmented button {
+  flex: 1;
+  justify-content: center;
+  margin-left: -1px;
+  padding-inline: 0.5rem;
+  border-radius: 0;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.dt-segmented button:first-child {
+  margin-left: 0;
+  border-radius: var(--dt-radius) 0 0 var(--dt-radius);
+}
+
+.dt-segmented button:last-child {
+  border-radius: 0 var(--dt-radius) var(--dt-radius) 0;
+}
+
+.dt-segmented button[aria-pressed="true"] {
+  position: relative;
+  border-color: var(--dt-accent);
+  color: var(--dt-accent);
+  background: var(--dt-accent-soft);
+}
+
+.dt-choice {
   display: flex;
   align-items: center;
   gap: 0.35rem;
@@ -628,6 +702,12 @@
 
 /* A click anywhere on a row whose checkbox works selects or clears it. */
 .dt-table tbody tr:has(> .dt-check > [data-dt-row-check]:enabled) {
+  cursor: pointer;
+}
+
+/* A click anywhere in the header checkbox's cell toggles it while it is
+   enabled (datatable.js). */
+.dt-table thead th.dt-check:has(> [data-dt-check-all]:enabled) {
   cursor: pointer;
 }
 

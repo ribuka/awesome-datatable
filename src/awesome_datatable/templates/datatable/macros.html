@@ -90,29 +90,33 @@
   </div>
 {%- endmacro %}
 
-{#- The null filter of a column menu, with the column's null count. -#}
-{% macro _null_filter(config, view, column) -%}
+{#- The null filter of a column menu, with the column's null count: a
+    segmented control of Any / Is null / Is not null, whose choice
+    (`aria-pressed`) datatable.js keeps in the hidden query input. -#}
+{% macro _null_filter(config, view, column, index) -%}
   {% set current = view.state.nulls.get(column.name, "") %}
-  <div class="dt-menu-section">
-    <fieldset class="dt-nulls">
-      <legend>Null values <span class="dt-count">{{ view.counts.nulls.get(column.name, 0) }}</span></legend>
+  {% set label_id = config.table_id ~ "-nulls-" ~ index %}
+  <div class="dt-menu-section dt-nulls">
+    <span class="dt-nulls-label" id="{{ label_id }}">Null values <span class="dt-count">{{ view.counts.nulls.get(column.name, 0) }}</span></span>
+    <input type="hidden" name="{{ config.prefix }}null__{{ column.name }}" value="{{ current }}" data-dt-query data-dt-null-value>
+    <div class="dt-segmented" role="group" aria-labelledby="{{ label_id }}">
       {% for value, label in [("", "Any"), ("is_null", "Is null"), ("is_not_null", "Is not null")] %}
-        <label><input type="radio" name="{{ config.prefix }}null__{{ column.name }}" value="{{ value }}" data-dt-query{% if value == current %} checked{% endif %}> {{ label }}</label>
+        <button type="button" data-dt-null="{{ value }}" aria-pressed="{{ 'true' if value == current else 'false' }}">{{ label }}</button>
       {% endfor %}
-    </fieldset>
+    </div>
   </div>
 {%- endmacro %}
 
-{#- The buttons under the filters of a column menu: Apply (enabled by
-    datatable.js while the filters differ from those applied), Cancel, and
-    Clear (enabled while the column has a filter applied), with the notice
-    of unapplied changes. -#}
+{#- The icon buttons under the filters of a column menu, named by their
+    `aria-label` and `title`: Apply (enabled by datatable.js while the
+    filters differ from those applied), Cancel, and Clear (enabled while the
+    column has a filter applied), beside the notice of unapplied changes. -#}
 {% macro _filter_actions(view, column, index) -%}
   <div class="dt-menu-section dt-filter-actions">
     <p class="dt-draft-status" role="status" data-dt-draft-status hidden>Unapplied changes</p>
     <div class="dt-filter-buttons">
-      <button type="button" class="dt-apply" data-dt-apply disabled><span aria-hidden="true">✓</span> Apply</button>
-      <button type="button" data-dt-cancel><span aria-hidden="true">×</span> Cancel</button>
+      <button type="button" class="dt-icon-button dt-apply" title="Apply filters" aria-label="Apply filters" data-dt-apply disabled><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2.5 8.5l3.5 3.5 7.5-8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="dt-icon-button dt-cancel" title="Cancel" aria-label="Cancel" data-dt-cancel><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
       {{ _clear_filter(view, column, index) }}
     </div>
   </div>
@@ -120,7 +124,7 @@
 
 {#- The Clear button of a column menu, a swapped part. -#}
 {% macro _clear_filter(view, column, index) -%}
-<button type="button" title="Clear the filters of this column" data-dt-clear-filter data-dt-part="clear-{{ index }}"{% if not view.state.is_filtered(column.name) %} disabled{% endif %}><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 1.5h4M2.5 3.5h11M4 3.5l.75 11h6.5l.75-11M6.75 6v6M9.25 6v6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> Clear</button>
+<button type="button" class="dt-icon-button dt-clear-filter" title="Clear the filters of this column" aria-label="Clear the filters of this column" data-dt-clear-filter data-dt-part="clear-{{ index }}"{% if not view.state.is_filtered(column.name) %} disabled{% endif %}><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M6 1.5h4M2.5 3.5h11M4 3.5l.75 11h6.5l.75-11M6.75 6v6M9.25 6v6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
 {%- endmacro %}
 
 {#- The sort buttons of a column menu, a swapped part. -#}
@@ -142,7 +146,7 @@
     {% if column.sortable %}{{ _sorts(view, column, index) }}{% endif %}
     {% if column.filter %}
       {{ _filter(config, view, column, index) }}
-      {{ _null_filter(config, view, column) }}
+      {{ _null_filter(config, view, column, index) }}
     {% endif %}
     <div class="dt-menu-section">
       <button type="button" data-dt-copy="{{ column.name }}">Copy column name</button>
@@ -251,19 +255,23 @@
 </div>
 {%- endmacro %}
 
-{#- Above the table, by the settings: the search box of the whole table, the
-    "Columns" menu showing or hiding columns (and resetting the column
-    widths) and the "Pin columns" toggle
-    (datatable.js applies and remembers both choices), the "Export" menu, and
-    the chips of the filters in use, each with a button clearing its controls. The search box is
-    preserved across reloads (hx-preserve), like the typed filters. -#}
+{#- Above the table, by the settings: the chips of the filters in use, each
+    with a button clearing its controls, and under them a line with the
+    search box of the whole table, filling the width left, and at the right
+    the "Columns" menu showing or hiding columns (and resetting the column
+    widths), the "Pin columns" toggle (datatable.js applies and remembers
+    both choices), and the "Export" menu. The search box is preserved across
+    reloads (hx-preserve), like the typed filters. -#}
 {% macro _toolbar(config, view, selected_count) -%}
+{% if config.filter_chips %}{{ _chips(view) }}{% endif %}
 {% if config.search or config.column_chooser or config.pin_toggle or config.export_url %}
 <div class="dt-toolbar">
   {% if config.search %}
     <input type="search" id="{{ config.table_id }}-search" class="dt-search" name="{{ config.prefix }}search" value="{{ view.state.search }}" placeholder="Search…"
            aria-label="Search" data-dt-query hx-preserve>
   {% endif %}
+  {% if config.column_chooser or config.pin_toggle or config.export_url %}
+  <div class="dt-toolbar-actions">
   {% if config.column_chooser %}
     {% set menu_id = config.table_id ~ "-columns-menu" %}
     <button type="button" class="dt-columns-button" popovertarget="{{ menu_id }}" aria-haspopup="dialog">Columns</button>
@@ -287,9 +295,10 @@
     <button type="button" class="dt-pin-button" aria-pressed="false" data-dt-pin-toggle><span class="dt-switch" aria-hidden="true"></span>Pin columns</button>
   {% endif %}
   {% if config.export_url %}{{ _export_menu(config, view, selected_count) }}{% endif %}
+  </div>
+  {% endif %}
 </div>
 {% endif %}
-{% if config.filter_chips %}{{ _chips(view) }}{% endif %}
 {%- endmacro %}
 
 {#- The chips of the filters in use, a swapped part. -#}
