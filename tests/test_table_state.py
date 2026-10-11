@@ -113,6 +113,7 @@ def test_parse_state_without_default_sort_keeps_frame_order() -> None:
         ({"t.order": ["up"]}, "invalid sort order"),
         ({"t.page": ["0"]}, "invalid page"),
         ({"t.page": ["x"]}, "invalid page"),
+        ({"t.parts": ["yes"]}, "invalid parts"),
     ],
 )
 def test_parse_state_rejects_invalid_parameters(
@@ -162,3 +163,10 @@ def test_table_config_rejects_invalid_settings(kwargs: dict[str, object], messag
     }
     with pytest.raises(ValueError, match=message):
         TableConfig(**settings)  # type: ignore[arg-type]
+
+
+def test_parse_state_reads_whether_only_the_parts_are_asked_for(config: TableConfig) -> None:
+    """``parts=1`` asks for the swapped parts only; by default the whole fragment."""
+    assert parse_state({}, config).parts is False
+    assert parse_state({"t.parts": [""]}, config).parts is False
+    assert parse_state({"t.parts": ["1"]}, config).parts is True

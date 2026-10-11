@@ -333,7 +333,10 @@
   // are keyed by control name without the table's prefix. `detail` goes
   // with the `dt-reload` event, so it belongs to this request only (its
   // response reads it in htmx:beforeSwap).
+  // The table shows that it is busy (`aria-busy`) at once, before anything
+  // else runs.
   function reload(root, values, detail = {}) {
+    root.setAttribute("aria-busy", "true");
     clearTimeout(queryTimers.get(root));
     const prefix = `${root.id}.`;
     for (const [name, value] of Object.entries(values)) {
@@ -1105,16 +1108,28 @@
     }
   });
 
+  // A request of the table sends its applied query (appliedQueryFields),
+  // put in here rather than by htmx's `hx-include`, whose time grows with
+  // the square of the inputs (a column menu can hold thousands of values).
+  // A reload of the table's own (`dt-reload`) asks only for the parts that
+  // swapParts swaps (`<id>.parts=1`), so the toolbar and the column menus
+  // are neither drawn nor sent again.
   document.addEventListener("htmx:configRequest", (event) => {
     const root = event.detail.elt;
-    if (root?.matches?.("[data-datatable]")) {
-      withAppliedFilters(root, event.detail.formData);
+    if (!root?.matches?.("[data-datatable]")) {
+      return;
+    }
+    for (const [name, value] of appliedQueryFields(root)) {
+      event.detail.formData.append(name, value);
+    }
+    if (event.detail.triggeringEvent?.type === RELOAD_EVENT) {
+      event.detail.formData.append(`${root.id}.parts`, "1");
     }
   });
 
-  // While a table reloads (`htmx-request` on the container) it shows that it
-  // is busy: the rows fade and a spinner turns (datatable.css), and
-  // `aria-busy` tells assistive technology.
+  // While a table reloads (`aria-busy` on the container, set already by
+  // reload) it shows that it is busy: the rows fade and a spinner turns
+  // (datatable.css), and assistive technology is told.
   document.addEventListener("htmx:beforeRequest", (event) => {
     if (event.detail.elt.matches?.("[data-datatable]")) {
       event.detail.elt.setAttribute("aria-busy", "true");
@@ -1205,9 +1220,11 @@
   }
 
   // A reload of the table's own (`dt-reload`: sorting, filtering, paging,
-  // the search box) swaps only the changed parts (swapParts). Other reloads
-  // (a trigger of the page, such as a catalog update) swap the whole
-  // fragment with htmx.
+  // the search box) swaps only the changed parts (swapParts), which are all
+  // its response holds. Should they not fit the table (a catalog update
+  // since changed them), the whole fragment is loaded instead
+  // (`dt-refresh`). Other reloads (a trigger of the page, such as a catalog
+  // update) swap the whole fragment with htmx.
   document.addEventListener("htmx:beforeSwap", (event) => {
     const root = event.detail.target ?? event.target;
     if (!root?.matches?.("[data-datatable]") || !event.detail.shouldSwap
@@ -1215,8 +1232,10 @@
       return;
     }
     const reloaded = event.detail.requestConfig.triggeringEvent;
-    if (swapParts(root, event.detail.serverResponse, reloaded.detail?.keptRow)) {
-      event.detail.shouldSwap = false;
+    event.detail.shouldSwap = false;
+    if (!swapParts(root, event.detail.serverResponse, reloaded.detail?.keptRow)) {
+      // After this request ends, so that hx-sync does not drop the new one.
+      setTimeout(() => htmx.trigger(root, "dt-refresh"));
     }
   });
 

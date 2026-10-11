@@ -51,7 +51,7 @@ def test_container_loads_the_fragment_and_keeps_the_selection(
     container = re.search(r'<div id="t"[^>]*>', html)
     assert container is not None
     assert 'hx-get="/table"' in container[0]
-    assert 'hx-trigger="load, dt-reload, data-changed from:body"' in container[0]
+    assert 'hx-trigger="load, dt-reload, dt-refresh, data-changed from:body"' in container[0]
     assert 'data-dt-selection="t-selection"' in container[0]
     assert "data-dt-locked" in container[0]
     assert """<input type="hidden" id="t-selection" name="keys" value='["k1"]'>""" in html
@@ -834,7 +834,7 @@ def test_container_called_with_a_block_holds_it_and_does_not_load(
 
     container = re.search(r'<div id="t"[^>]*>', html)
     assert container is not None
-    assert 'hx-trigger="dt-reload, data-changed from:body"' in container[0]
+    assert 'hx-trigger="dt-reload, dt-refresh, data-changed from:body"' in container[0]
     assert "Loading" not in html
     assert html.index('<tr data-dt-key="k1"') < html.index('id="t-selection"')
 
@@ -884,3 +884,31 @@ def test_fragment_offers_the_rows_per_page(
 def _footer_end(html: str) -> str:
     """Return the footer under the table, to the end of the fragment."""
     return html[html.index('<div class="dt-footer"'):]
+
+
+def test_fragment_of_the_parts_draws_only_the_swapped_parts(
+    environment: Environment, config: TableConfig, frame: pl.DataFrame
+) -> None:
+    """With ``parts``, the same parts and headers come without the toolbar and the menus."""
+    config = replace(
+        config, histograms=True, filter_chips=True, max_selected=3, export_url="/table/export",
+        search=True, column_chooser=True,
+    )
+    parameters = {"t.eq__group": ["a"], "t.sort": ["count"], "t.order": ["desc"]}
+    whole = _render(
+        environment, "{{ fragment(config, view) }}",
+        config=config, view=apply_state(frame, parse_state(parameters, config), config),
+    )
+    view = apply_state(frame, parse_state({**parameters, "t.parts": ["1"]}, config), config)
+
+    html = _render(environment, "{{ fragment(config, view, ['k1']) }}", config=config, view=view)
+
+    parts = re.findall(r'data-dt-part="([^"]+)"', html)
+    assert parts and sorted(parts) == sorted(re.findall(r'data-dt-part="([^"]+)"', whole))
+    assert len(re.findall(r"<th[ >]", html)) == len(re.findall(r"<th[ >]", whole))
+    assert re.findall(r'aria-sort="(\w+)"', html) == ["descending"]
+    assert "data-dt-menu" not in html
+    assert "dt-toolbar" not in html
+    assert 'name="t.eq__group"' not in html
+    assert '<tbody data-dt-part="rows">' in html
+    assert 'data-dt-row-check checked' in html

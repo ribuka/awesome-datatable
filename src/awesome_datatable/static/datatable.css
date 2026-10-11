@@ -705,15 +705,15 @@
   display: contents;
 }
 
-/* While the table reloads (`htmx-request`), its rows fade and a spinner
+/* While the table reloads (`aria-busy`), its rows fade and a spinner
    turns over them, both only after a moment so that a quick reload does not
    flicker. */
-.dt-root.htmx-request .dt-scroll {
+.dt-root[aria-busy="true"] .dt-scroll {
   opacity: 0.55;
   transition: opacity 0.15s 0.1s;
 }
 
-.dt-root.htmx-request::after {
+.dt-root[aria-busy="true"]::after {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -732,11 +732,11 @@
 
 /* Before the first fragment arrives, the spinner turns beside "Loading…"
    instead of over it, after the same moment. */
-.dt-root.htmx-request:has(> .dt-loading)::after {
+.dt-root[aria-busy="true"]:has(> .dt-loading)::after {
   content: none;
 }
 
-.dt-root.htmx-request > .dt-loading::before {
+.dt-root[aria-busy="true"] > .dt-loading::before {
   display: inline-block;
   width: 1em;
   height: 1em;
@@ -764,8 +764,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dt-root.htmx-request::after,
-  .dt-root.htmx-request > .dt-loading::before {
+  .dt-root[aria-busy="true"]::after,
+  .dt-root[aria-busy="true"] > .dt-loading::before {
     animation: dt-appear 0s 0.1s forwards;
   }
 }
