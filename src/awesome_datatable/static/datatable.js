@@ -573,12 +573,13 @@
     }
   });
 
-  // The "Pin columns" toggle (`[data-dt-pin-toggle]`) pins the cells marked
-  // `.dt-pinned` (the checkbox column and the first column) at the left. The
+  // The "Pin columns" toggle (`[data-dt-pin-toggle]`) pins the first column
+  // (`.dt-pinned`) at the left, next to the checkbox column, which always
+  // stays there (datatable.css). The
   // choice is remembered (`pinned-columns`, off by default) and shown on the
   // container (`data-dt-pinned`), which the reloads keep, so a reloaded table
   // does not jump; the toggle shows it with `aria-pressed`. A table without
-  // the toggle pins nothing.
+  // the toggle pins only the checkbox column.
   function syncPinned(root) {
     const toggle = root.querySelector("[data-dt-pin-toggle]");
     const pinned = Boolean(toggle) && preference(root, "pinned-columns", false, (value) => typeof value === "boolean");

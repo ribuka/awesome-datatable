@@ -641,9 +641,11 @@
   text-align: center;
 }
 
-/* While the "Pin columns" toggle is on (`data-dt-pinned` on the
-   container), the checkbox column and the first column stay at the left
-   while the table scrolls sideways; the header cells stay above them. */
+/* The checkbox column always stays at the left while the table scrolls
+   sideways; while the "Pin columns" toggle is on (`data-dt-pinned` on the
+   container), the first column stays next to it. The header cells stay
+   above them. */
+.dt-table .dt-check,
 .dt-root[data-dt-pinned] .dt-table .dt-pinned {
   position: sticky;
   left: 0;
@@ -654,6 +656,7 @@
   left: var(--dt-check-width);
 }
 
+.dt-table thead th.dt-check,
 .dt-root[data-dt-pinned] .dt-table thead th.dt-pinned {
   z-index: 3;
 }
