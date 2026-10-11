@@ -208,11 +208,13 @@ header checkbox's matching keys, the export, and anything else built on
     searched; the footer counts the shown columns. Without storage (a
     private window, for example) the choice lasts until the page is left.
   - `pin_toggle`: a `Pin columns` toggle button (`aria-pressed`, drawn as a
-    switch) that pins the checkbox column and the first column at the left
-    while the table scrolls sideways (`position: sticky`, `.dt-pinned`); the
-    header stays on top of them. Pinning is off until the toggle turns it
-    on. Click, or Space / Enter on the focused button, switches it; it has
-    no shortcut key of its own. The choice is kept in `localStorage` under
+    switch) that pins the first column at the left, next to the checkbox
+    column, while the table scrolls sideways (`position: sticky`,
+    `.dt-pinned`); the header stays on top of them. The checkbox column of a
+    selectable table stays at the left with or without the toggle. Pinning
+    the first column is off until the toggle turns it on. Click, or Space /
+    Enter on the focused button, switches it; it has no shortcut key of its
+    own. The choice is kept in `localStorage` under
     `datatable:pinned-columns:<table_id>` (`true` or `false`; with
     `pin_preference`, under that table id instead, so that the table shares
     the choice of that table, and switching it updates every table in the page
@@ -220,8 +222,8 @@ header checkbox's matching keys, the export, and anything else built on
     after every reload (`data-dt-pinned` on the container, which the reloads
     keep, so the table does not jump). Without storage it lasts until the
     page is left, like the hidden columns. A table without the toggle pins
-    nothing. Which columns are pinned is not configurable: the first column
-    is the one naming the rows (such as the file name).
+    only the checkbox column. Which columns are pinned is not configurable:
+    the first column is the one naming the rows (such as the file name).
   - `filter_chips`: a chip per column filter in use, in column order:
     `name ~ "words"`, `lot ∈ {A, B}`, `temp ≥ 20` / `temp ≤ 30` /
     `20 ≤ temp ≤ 30` (both bounds are one chip), `lot is_null` /
@@ -465,7 +467,7 @@ container, so several tables can share a page.
 | `.dt-menu-section`, `.dt-sorts`, `.dt-filter`, `.dt-choices`, `.dt-choice-list`, `.dt-choice`, `.dt-nulls`, `.dt-count` | Menu parts: sort buttons (`[data-dt-sort][data-dt-order]`, `aria-pressed`), the filter, the value list (its fieldset and the `<div>` holding the values), a value, the null filter, and counts. |
 | `[data-dt-copy]` | "Copy column name" button. |
 | `.dt-check`, `[data-dt-check-all]`, `[data-dt-row-check]` | Selection checkboxes. |
-| `.dt-pinned` | Cells of the checkbox column and the first column, pinned at the left while the container has `data-dt-pinned`. |
+| `.dt-pinned` | Cells of the checkbox column and the first column; the checkbox column (`.dt-check`) is always pinned at the left, the first column while the container has `data-dt-pinned`. |
 | `.dt-limit[data-dt-limit]` | Notice that the selection limit is reached (`hidden` below it). |
 | `tr[data-dt-key]` | Row with its key. |
 | `.dt-footer` | Footer under the table. |

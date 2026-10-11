@@ -367,9 +367,9 @@
 <table class="dt-table">
   <thead>
     <tr>
-      {#- The checkbox column and the first column (dt-pinned) stay at the
-          left while the table scrolls sideways when the "Pin columns"
-          toggle is on. -#}
+      {#- The checkbox column always stays at the left while the table
+          scrolls sideways, and the first column (dt-pinned) next to it when
+          the "Pin columns" toggle is on. -#}
       {% if config.selectable %}
         <th class="dt-check dt-pinned"><input type="checkbox" data-dt-check-all aria-label="{{ config.select_all_label }}"{% if header_blocked %} disabled{% endif %}></th>
       {% endif %}

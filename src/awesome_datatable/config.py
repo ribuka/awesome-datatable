@@ -118,11 +118,11 @@ class TableConfig:
         (all but the first). The browser remembers the choice per
         ``table_id``.
     pin_toggle : bool, default False
-        Whether a "Pin columns" toggle above the table pins the checkbox
-        column and the first column at the left while the table scrolls
-        sideways. Pinning is off until turned on; the browser remembers the
-        choice per ``table_id``, or per ``pin_preference``. Without the
-        toggle nothing is pinned.
+        Whether a "Pin columns" toggle above the table pins the first
+        column at the left, next to the checkbox column, while the table
+        scrolls sideways. Pinning is off until turned on; the browser
+        remembers the choice per ``table_id``, or per ``pin_preference``.
+        The checkbox column stays at the left with or without the toggle.
     pin_preference : str | None, default None
         Table id whose "Pin columns" choice the table shares, so that the
         same rows shown in another table are pinned alike; ``None`` for the
