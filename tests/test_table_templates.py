@@ -781,6 +781,25 @@ def test_fragment_has_an_export_menu_of_the_filtered_and_selected_rows(
     assert " disabled" not in menu
 
 
+def test_export_button_starts_with_the_configured_icon(
+    config: TableConfig, frame: pl.DataFrame
+) -> None:
+    """The "Export" button starts with the application's icon markup, or has text alone."""
+    exporting = replace(config, export_url="/table/export")
+    view = apply_state(frame, TableState(), exporting)
+    plain = Environment(autoescape=select_autoescape(["html"]))
+    configure_environment(plain)
+    iconed = Environment(autoescape=select_autoescape(["html"]))
+    configure_environment(iconed, export_icon='<span class="icon" aria-hidden="true">download</span>')
+
+    button = 'popovertarget="t-export-menu" aria-haspopup="dialog">{}Export</button>'
+    call = "{{ fragment(config, view) }}"
+    assert button.format("") in _render(plain, call, config=exporting, view=view)
+    assert button.format('<span class="icon" aria-hidden="true">download</span>') in _render(
+        iconed, call, config=exporting, view=view
+    )
+
+
 def test_fragment_export_menu_disables_rows_without_any(
     environment: Environment, config: TableConfig, frame: pl.DataFrame
 ) -> None:

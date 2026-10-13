@@ -11,7 +11,11 @@ paged on the server and shown with htmx.
 - flat-pca's data selection and transform screens use it for the file table
   (`services/file_table.py`, `routes/catalog.py`), and the sidebar's
   shown-file dialog for the transform targets of the shown run
-  (`services/view_file_table.py`, `routes/view_selection.py`).
+  (`services/view_file_table.py`, `routes/view_selection.py`), and the model
+  screen for the explained variance table of the chosen fit run
+  (`services/explained_variance_table.py`, `routes/model.py`). flat-pca gives
+  every "Export" button its Material Symbols `download` icon
+  (`templating.py`).
 
 Update this document whenever the component gains a feature.
 
@@ -30,7 +34,7 @@ Update this document whenever the component gains a feature.
 | `counts.py` | `ColumnCounts` and `count_values`: rows of each choice value and null values per filtered column, for the column menus. |
 | `pagination.py` | `Page` and `paginate`: the page among the rows. |
 | `formatting.py` | `format_value`: the cell text (`dt_cell` filter); `dtype_label`: the column type under each column name. |
-| `environment.py` | `configure_environment`: registers the templates and the filter with a Jinja2 environment; `TEMPLATES_DIR`, `STATIC_DIR`. |
+| `environment.py` | `configure_environment`: registers the templates, the filter, and the "Export" button's icon (`dt_export_icon`) with a Jinja2 environment; `TEMPLATES_DIR`, `STATIC_DIR`. |
 | `templates/datatable/macros.html` | The `container` and `fragment` macros. |
 | `static/datatable.js`, `static/datatable.css` | Browser behavior and look. |
 
@@ -46,6 +50,16 @@ Update this document whenever the component gains a feature.
    ```
 
    and load `datatable.css` and `datatable.js` (after htmx) on the page.
+   `export_icon` (HTML inserted as is, so trusted markup) puts an icon of the
+   application's own before the text of every "Export" button; the package
+   ships no icons:
+
+   ```python
+   configure_environment(
+       templates.env,
+       export_icon='<span class="material-symbols-outlined" aria-hidden="true">download</span>',
+   )
+   ```
 
 2. Describe the table:
 
