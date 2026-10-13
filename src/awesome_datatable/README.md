@@ -13,7 +13,10 @@ paged on the server and shown with htmx.
   shown-file dialog for the transform targets of the shown run
   (`services/view_file_table.py`, `routes/view_selection.py`), and the model
   screen for the explained variance table of the chosen fit run
-  (`services/explained_variance_table.py`, `routes/model.py`). flat-pca gives
+  (`services/explained_variance_table.py`, `routes/model.py`), and the score
+  and T²/Q screens for the files of the points chosen in their figures
+  (`services/point_table.py`, `routes/point_table.py`, `routes/scores.py`,
+  `routes/monitoring.py`; `extra_inputs` and `method="post"`). flat-pca gives
   every "Export" button its Material Symbols `download` icon
   (`templating.py`).
 
@@ -76,6 +79,8 @@ Update this document whenever the component gains a feature.
            ColumnConfig("n_rows", label="rows"),   # sortable, no filter
        ),
        url="/catalog/files",          # returns the fragment
+       method="get",                  # "post" sends the fields as a form body
+       extra_inputs=(),               # ids of inputs outside the container sent too
        page_size=100,                 # rows per page at first
        page_sizes=(50, 200, 500),     # "Rows per page" choice; () for none
        selectable=True,
@@ -155,8 +160,21 @@ Update this document whenever the component gains a feature.
 
    The fields are the table's query parameters (as for the fragment; `page`
    is ignored), `<table_id>.export_format` (`csv` or `parquet`),
-   `<table_id>.export_rows` (`filtered` or `selected`), and the selection
-   input (`selection_name`, one JSON array). `datatable.js` sends them.
+   `<table_id>.export_rows` (`filtered` or `selected`), the selection
+   input (`selection_name`, one JSON array), and the `extra_inputs`.
+   `datatable.js` sends them.
+
+6. To show other rows of the frame, such as the rows of keys chosen
+   elsewhere in the page, keep what chooses them in inputs outside the
+   container and name their ids in `extra_inputs`: every fragment request
+   and the export send their names and values besides the table's query,
+   and the routes read them and narrow the frame before `apply_state` and
+   `export_file`. With `method="post"` the fragment requests are posts
+   (`hx-post`), whose form body has no length limit (read the fields from
+   `await request.form()`). After changing the inputs, dispatch
+   `datatable:refresh` (bubbling) on the container: the whole fragment is
+   loaded again from the first page with the applied query, so that the
+   column menus show the values of the new rows.
 
 ## Columns
 
@@ -469,7 +487,7 @@ container, so several tables can share a page.
 
 | Selector | Element |
 | --- | --- |
-| `.dt-root[data-datatable]` | Container (`id` = `table_id`); `data-dt-locked` when locked; `data-dt-pinned` while the left columns are pinned; `data-dt-max-selected` with the limit; `data-dt-export-url` with `export_url`; `data-dt-pin-preference` with `pin_preference`; `aria-busy` and `htmx-request` while reloading. |
+| `.dt-root[data-datatable]` | Container (`id` = `table_id`, `hx-get` or `hx-post` = `url`); `data-dt-extra-inputs` with the ids of `extra_inputs`; `data-dt-locked` when locked; `data-dt-pinned` while the left columns are pinned; `data-dt-max-selected` with the limit; `data-dt-export-url` with `export_url`; `data-dt-pin-preference` with `pin_preference`; `aria-busy` and `htmx-request` while reloading. |
 | `[data-dt-part]` | A part of the fragment swapped after the table's own reloads (`state`, `rows`, `footer`, `matching`, `chips`, `limit`, `export-filtered`, and per column `sort-<n>`, `filtered-<n>`, `histogram-<n>`, `sorts-<n>`, `clear-<n>`). |
 | `.dt-state`, `.dt-chips-slot`, `.dt-filter-state` | Holders of the hidden sort / order / page inputs, of the chips, and of a column's filter mark (no box of their own). |
 | `.dt-scroll` / `.dt-table` | Scroll box with a fixed header / the table (`table-layout: fixed`). |

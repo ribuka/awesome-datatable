@@ -253,6 +253,18 @@
     return fields;
   }
 
+  // Adds the name and value of each input outside the table that its
+  // requests send (`data-dt-extra-inputs`, a list of ids) to `fields`.
+  function withExtraInputs(root, fields) {
+    for (const id of (root.dataset.dtExtraInputs ?? "").split(" ").filter(Boolean)) {
+      const input = document.getElementById(id);
+      if (input) {
+        fields.append(input.name, input.value);
+      }
+    }
+    return fields;
+  }
+
   // Returns the file name of a download from its Content-Disposition
   // header: `filename*` (percent-encoded UTF-8) or else `filename`.
   function downloadName(disposition, fallback) {
@@ -292,16 +304,17 @@
     setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
   }
 
-  // An export button posts the table's applied query, the format and rows
-  // asked for, and the selection (the hidden input's JSON array, as one
-  // field) to `data-dt-export-url`, and saves the file it answers. The
+  // An export button posts the table's applied query, the extra inputs, the
+  // format and rows asked for, and the selection (the hidden input's JSON
+  // array, as one field) to `data-dt-export-url`, and saves the file it
+  // answers. The
   // server filters and sorts the rows as for the table. A failure is shown
   // in the menu, which stays open; a success closes it.
   async function exportRows(root, button) {
     const menu = button.closest("[data-dt-menu]");
     const error = menu.querySelector("[data-dt-export-error]");
     const buttons = [...menu.querySelectorAll("[data-dt-export]")];
-    const fields = appliedQueryFields(root);
+    const fields = withExtraInputs(root, appliedQueryFields(root));
     fields.append(`${root.id}.export_format`, button.dataset.dtExport);
     fields.append(`${root.id}.export_rows`, button.dataset.dtExportRows);
     if (root.dataset.dtSelection) {
@@ -355,6 +368,25 @@
     }
     htmx.trigger(root, RELOAD_EVENT, detail);
   }
+
+  // A page that changes the rows of a table, such as by an extra input,
+  // dispatches `datatable:refresh` on the container: the whole fragment is
+  // loaded again from the first page with the applied query. The column
+  // menus are drawn again too, since their values and counts follow the
+  // rows.
+  document.addEventListener("datatable:refresh", (event) => {
+    const root = event.target;
+    if (!root.matches?.("[data-datatable]")) {
+      return;
+    }
+    root.setAttribute("aria-busy", "true");
+    clearTimeout(queryTimers.get(root));
+    const page = root.querySelector(`[data-dt-query][name="${CSS.escape(`${root.id}.page`)}"]`);
+    if (page) {
+      page.value = "1";
+    }
+    htmx.trigger(root, "dt-refresh");
+  });
 
   // Typing in the search box of the whole table reloads the first page
   // after a pause. The filters of the column menus wait for Apply (below).
@@ -431,8 +463,11 @@
     if (event.detail.successful || !root.matches?.("[data-datatable]")) {
       return;
     }
+    // A GET sends the page in the URL, a POST (`hx-post`) in the form body.
+    const name = `${root.id}.page`;
     const path = event.detail.pathInfo?.finalRequestPath ?? "";
-    const failedPage = new URL(path, window.location.href).searchParams.get(`${root.id}.page`);
+    const failedPage = new URL(path, window.location.href).searchParams.get(name)
+      ?? event.detail.requestConfig?.formData?.get(name) ?? null;
     for (const input of root.querySelectorAll("[data-dt-page-input]")) {
       if (String(askedPages.get(input)) === failedPage) {
         askedPages.delete(input);
@@ -1145,9 +1180,10 @@
     }
   });
 
-  // A request of the table sends its applied query (appliedQueryFields),
-  // put in here rather than by htmx's `hx-include`, whose time grows with
-  // the square of the inputs (a column menu can hold thousands of values).
+  // A request of the table sends its applied query (appliedQueryFields) and
+  // its extra inputs, put in here rather than by htmx's `hx-include`, whose
+  // time grows with the square of the inputs (a column menu can hold
+  // thousands of values).
   // A reload of the table's own (`dt-reload`) asks only for the parts that
   // swapParts swaps (`<id>.parts=1`), so the toolbar and the column menus
   // are neither drawn nor sent again.
@@ -1156,7 +1192,7 @@
     if (!root?.matches?.("[data-datatable]")) {
       return;
     }
-    for (const [name, value] of appliedQueryFields(root)) {
+    for (const [name, value] of withExtraInputs(root, appliedQueryFields(root))) {
       event.detail.formData.append(name, value);
     }
     if (event.detail.triggeringEvent?.type === RELOAD_EVENT) {

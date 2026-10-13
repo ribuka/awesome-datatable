@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 FilterKind = Literal["text", "choice", "number", "datetime"]
+RequestMethod = Literal["get", "post"]
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,15 @@ class TableConfig:
         Shown columns, in display order.
     url : str
         URL that returns the table fragment for the table's query parameters.
+    method : RequestMethod, default "get"
+        HTTP method of the fragment requests: ``"get"`` sends the fields in
+        the query string, ``"post"`` as a form body, which has no length
+        limit (for long ``extra_inputs``, for example).
+    extra_inputs : tuple[str, ...], default ()
+        Ids of inputs outside the container whose name and value every
+        request of the table sends besides its query: the fragment requests
+        and the export. The application reads them itself, for example to
+        choose the rows of the frame.
     page_size : int, default 100
         Rows per page until the page size is chosen.
     page_sizes : tuple[int, ...], default ()
@@ -146,6 +156,8 @@ class TableConfig:
     key: str
     columns: tuple[ColumnConfig, ...]
     url: str
+    method: RequestMethod = "get"
+    extra_inputs: tuple[str, ...] = ()
     page_size: int = 100
     page_sizes: tuple[int, ...] = ()
     selectable: bool = False
@@ -169,12 +181,14 @@ class TableConfig:
         Raises
         ------
         ValueError
-            If the page size or an offered page size is not positive, a
-            column name repeats, the
+            If the method is unknown, the page size or an offered page size
+            is not positive, a column name repeats, the
             default sort column is not a sortable column, or the selection
             limit is not a positive integer or is set on a table without
             selection.
         """
+        if self.method not in ("get", "post"):
+            raise ValueError(f"method must be 'get' or 'post': {self.method!r}")
         if self.page_size < 1:
             raise ValueError(f"page_size must be positive: {self.page_size}")
         if any(size < 1 for size in self.page_sizes):
