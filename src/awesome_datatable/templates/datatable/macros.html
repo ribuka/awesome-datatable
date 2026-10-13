@@ -233,10 +233,11 @@
     filters (on all pages) and, in a selectable table, for the selected rows.
     datatable.js posts the table's query controls and the selection to
     `config.export_url` and saves the file; it keeps the selected count and
-    its buttons in step with the selection. -#}
+    its buttons in step with the selection. The button starts with the
+    application's icon (`dt_export_icon`, see configure_environment). -#}
 {% macro _export_menu(config, view, selected_count) -%}
 {% set menu_id = config.table_id ~ "-export-menu" %}
-<button type="button" class="dt-export-button" popovertarget="{{ menu_id }}" aria-haspopup="dialog">Export</button>
+<button type="button" class="dt-export-button" popovertarget="{{ menu_id }}" aria-haspopup="dialog">{{ dt_export_icon|safe }}Export</button>
 <div popover id="{{ menu_id }}" class="dt-menu" role="dialog" aria-label="Export" data-dt-menu data-dt-export-menu>
   {{ _export_rows("filtered", "Filtered rows", view.page.total) }}
   {% if config.selectable %}{{ _export_rows("selected", "Selected rows", selected_count) }}{% endif %}
