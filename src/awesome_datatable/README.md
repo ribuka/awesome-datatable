@@ -13,7 +13,9 @@ paged on the server and shown with htmx.
   shown-file dialog for the transform targets of the shown run
   (`services/view_file_table.py`, `routes/view_selection.py`), and the model
   screen for the explained variance table of the chosen fit run
-  (`services/explained_variance_table.py`, `routes/model.py`), and the score
+  (`services/explained_variance_table.py`, `routes/model.py`) and the
+  coefficient table of component k (`services/coefficient_table.py`,
+  `routes/model.py`), and the score
   and T²/Q screens for the files of the points chosen in their figures
   (`services/point_table.py`, `routes/point_table.py`, `routes/scores.py`,
   `routes/monitoring.py`; `extra_inputs` and `method="post"`). flat-pca gives
