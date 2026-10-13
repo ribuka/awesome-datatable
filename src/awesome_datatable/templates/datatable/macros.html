@@ -18,14 +18,16 @@
     `hx-include` takes time growing with the square of the inputs, and a
     column menu can hold thousands of values). `dt-reload` (the table's own
     reloads) asks for the swapped parts only; `dt-refresh` reloads the
-    whole fragment. -#}
+    whole fragment. The requests use `config.method` and also send the
+    inputs named by `config.extra_inputs` (`data-dt-extra-inputs`). -#}
 {% macro container(config, selected=[], locked=false, triggers="") -%}
-<div id="{{ config.table_id }}" class="dt-root" data-datatable hx-get="{{ config.url }}"
+<div id="{{ config.table_id }}" class="dt-root" data-datatable hx-{{ config.method }}="{{ config.url }}"
      hx-target="this" hx-swap="innerHTML" hx-sync="this:replace"
      hx-trigger="{% if caller is not defined %}load, {% endif %}dt-reload, dt-refresh{% if triggers %}, {{ triggers }}{% endif %}"
      {%- if config.selectable %} data-dt-selection="{{ config.table_id }}-selection"{% endif %}
      {%- if config.max_selected is not none %} data-dt-max-selected="{{ config.max_selected }}"{% endif %}
      {%- if config.export_url %} data-dt-export-url="{{ config.export_url }}"{% endif %}
+     {%- if config.extra_inputs %} data-dt-extra-inputs="{{ config.extra_inputs|join(' ') }}"{% endif %}
      {%- if config.pin_preference %} data-dt-pin-preference="{{ config.pin_preference }}"{% endif %}
      {%- if locked %} data-dt-locked{% endif %}>
   {%- if caller is defined %}

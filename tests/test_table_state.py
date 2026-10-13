@@ -142,6 +142,7 @@ def test_parse_state_reads_a_page_size_among_the_choices(config: TableConfig) ->
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
+        ({"method": "put"}, "method"),
         ({"page_size": 0}, "page_size"),
         ({"page_sizes": (10, 0)}, "page_sizes"),
         ({"columns": (ColumnConfig("k"), ColumnConfig("k"))}, "unique"),
@@ -153,7 +154,7 @@ def test_parse_state_reads_a_page_size_among_the_choices(config: TableConfig) ->
     ],
 )
 def test_table_config_rejects_invalid_settings(kwargs: dict[str, object], message: str) -> None:
-    """The page sizes, column names, default sort, and selection limit are checked."""
+    """The method, page sizes, column names, default sort, and selection limit are checked."""
     settings: dict[str, object] = {
         "table_id": "t",
         "key": "k",

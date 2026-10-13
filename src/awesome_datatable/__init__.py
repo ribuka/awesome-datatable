@@ -5,7 +5,7 @@ it can be reused outside flat-pca; see ``README.md`` for its use.
 """
 
 from .chips import FilterChip, filter_chips
-from .config import ColumnConfig, FilterKind, TableConfig
+from .config import ColumnConfig, FilterKind, RequestMethod, TableConfig
 from .counts import ColumnCounts, count_values
 from .environment import STATIC_DIR, TEMPLATES_DIR, configure_environment
 from .export import (
@@ -63,6 +63,7 @@ __all__ = [
     "HistogramBin",
     "NullFilter",
     "Page",
+    "RequestMethod",
     "TableConfig",
     "TableState",
     "TableSummary",

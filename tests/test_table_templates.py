@@ -58,6 +58,19 @@ def test_container_loads_the_fragment_and_keeps_the_selection(
     assert html.index("</div>") < html.index('id="t-selection"')
 
 
+def test_container_posts_with_the_extra_inputs(environment: Environment) -> None:
+    """A POST table loads its fragment with hx-post and names the inputs its requests send."""
+    config = TableConfig(
+        table_id="p", key="k", columns=(), url="/p", method="post", extra_inputs=("a", "b")
+    )
+
+    html = _render(environment, "{{ container(config) }}", config=config)
+
+    assert 'hx-post="/p"' in html
+    assert "hx-get" not in html
+    assert 'data-dt-extra-inputs="a b"' in html
+
+
 def test_container_of_a_plain_table_has_no_selection(environment: Environment) -> None:
     """A table without selection has no selection input."""
     config = TableConfig(table_id="p", key="k", columns=(), url="/p")
@@ -66,6 +79,7 @@ def test_container_of_a_plain_table_has_no_selection(environment: Environment) -
 
     assert "data-dt-selection" not in html
     assert 'type="hidden"' not in html
+    assert "data-dt-extra-inputs" not in html
 
 
 def test_fragment_shows_controls_rows_and_pages(
