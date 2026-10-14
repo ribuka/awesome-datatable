@@ -229,13 +229,13 @@ def export_rows(
     return rows.select(column.name for column in config.columns).collect()
 
 
-def export_filename(config: TableConfig, file_format: ExportFormat, moment: datetime) -> str:
+def export_filename(name: str, file_format: ExportFormat, moment: datetime) -> str:
     """Return the name of an exported file.
 
     Parameters
     ----------
-    config : TableConfig
-        Table settings naming the file (``export_name``).
+    name : str
+        Start of the file name, such as a table's ``export_name``.
     file_format : ExportFormat
         ``"csv"`` or ``"parquet"``, the file extension.
     moment : datetime
@@ -244,9 +244,9 @@ def export_filename(config: TableConfig, file_format: ExportFormat, moment: date
     Returns
     -------
     str
-        ``<export_name>_<YYYYmmdd-HHMMSS>.<csv|parquet>``.
+        ``<name>_<YYYYmmdd-HHMMSS>.<csv|parquet>``.
     """
-    return f"{config.export_name}_{moment:%Y%m%d-%H%M%S}.{file_format}"
+    return f"{name}_{moment:%Y%m%d-%H%M%S}.{file_format}"
 
 
 def file_content(rows: pl.DataFrame, file_format: ExportFormat) -> bytes:
@@ -300,6 +300,6 @@ def export_file(
     rows = export_rows(frame, request, config)
     return ExportFile(
         content=file_content(rows, request.file_format),
-        filename=export_filename(config, request.file_format, moment),
+        filename=export_filename(config.export_name, request.file_format, moment),
         media_type=MEDIA_TYPES[request.file_format],
     )
