@@ -226,12 +226,10 @@ def test_parquet_keeps_the_rows_and_column_types(frame: pl.DataFrame) -> None:
     assert pl.read_parquet(io.BytesIO(content)).equals(rows)
 
 
-def test_export_filename_has_the_name_and_time(config: TableConfig) -> None:
-    """Files are named ``<export_name>_<YYYYmmdd-HHMMSS>.<format>``."""
-    named = replace(config, export_name="catalog")
-
-    assert export_filename(named, "csv", MOMENT) == "catalog_20261010-090507.csv"
-    assert export_filename(config, "parquet", MOMENT) == "table_20261010-090507.parquet"
+def test_export_filename_has_the_name_and_time() -> None:
+    """Files are named ``<name>_<YYYYmmdd-HHMMSS>.<format>``."""
+    assert export_filename("catalog", "csv", MOMENT) == "catalog_20261010-090507.csv"
+    assert export_filename("table", "parquet", MOMENT) == "table_20261010-090507.parquet"
 
 
 def test_export_file_headers_download_the_file() -> None:
