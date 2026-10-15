@@ -984,26 +984,28 @@
   });
 
   // Shows a sort chosen in a column menu at once, before the reload brings
-  // the rows: the column's mark and the pressed sort buttons. Clearing the
-  // sort waits for the reload, which shows the default sort.
+  // the rows: the column's mark and the pressed sort buttons.
   function showSort(root, name, order) {
-    if (!name) {
-      return;
-    }
     for (const mark of root.querySelectorAll(".dt-sort-mark")) {
       const column = mark.closest("[data-dt-column]")?.dataset.dtColumn;
       mark.textContent = column === name ? (order === "desc" ? "▼" : "▲") : "";
     }
     for (const button of root.querySelectorAll("[data-dt-sort]")) {
-      if (button.dataset.dtSort) {
-        button.setAttribute("aria-pressed", String(button.dataset.dtSort === name && button.dataset.dtOrder === order));
-      }
+      button.setAttribute("aria-pressed", String(button.dataset.dtSort === name && button.dataset.dtOrder === order));
     }
   }
 
-  // A sort button of a column menu sorts by its column (or clears the sort
-  // with an empty `data-dt-sort`) and closes the menu; "Copy column name"
-  // copies it and closes the menu; the page buttons move between pages.
+  // The `abs` query value of a column menu's sort: "1" while its Abs
+  // checkbox (a numeric column's) is checked.
+  function absoluteOf(element) {
+    const box = element.closest("[data-dt-menu]")?.querySelector("[data-dt-sort-absolute]");
+    return box?.checked ? "1" : "";
+  }
+
+  // A sort button of a column menu sorts by its column, by the absolute
+  // values while the menu's Abs is checked, and closes the menu; "Copy
+  // column name" copies it and closes the menu; the page buttons move
+  // between pages.
   document.addEventListener("click", (event) => {
     const root = tableOf(event.target);
     if (!root) {
@@ -1013,7 +1015,12 @@
     if (sort) {
       closeMenu(sort);
       showSort(root, sort.dataset.dtSort, sort.dataset.dtOrder);
-      reload(root, { sort: sort.dataset.dtSort, order: sort.dataset.dtOrder, page: "1" });
+      reload(root, {
+        sort: sort.dataset.dtSort,
+        order: sort.dataset.dtOrder,
+        abs: absoluteOf(sort),
+        page: "1",
+      });
       return;
     }
     const copy = event.target.closest("[data-dt-copy]");
@@ -1025,6 +1032,22 @@
     const page = event.target.closest("[data-dt-page]");
     if (page) {
       reload(root, { page: page.dataset.dtPage });
+    }
+  });
+
+  // The Abs checkbox of the sorted column sorts it again in the same
+  // direction, by the absolute values or not, and closes the menu. On
+  // another column it waits for Asc or Desc.
+  document.addEventListener("change", (event) => {
+    const root = tableOf(event.target);
+    const box = event.target;
+    if (!root || !box.matches("[data-dt-sort-absolute]")) {
+      return;
+    }
+    const sort = root.querySelector(`[data-dt-query][name="${CSS.escape(`${root.id}.sort`)}"]`);
+    if (sort?.value === box.dataset.dtSortAbsolute) {
+      closeMenu(box);
+      reload(root, { abs: box.checked ? "1" : "", page: "1" });
     }
   });
 

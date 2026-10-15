@@ -204,8 +204,9 @@ does not fit its column, or an unparsable value is a `ValueError`.
 
 | Name | Value |
 | --- | --- |
-| `sort` | A sortable column (default: `default_sort`, or the frame's order). An empty value clears the sort back to the default. |
+| `sort` | A sortable column (default: `default_sort`, or the frame's order). An empty value is the default. |
 | `order` | `asc` (default) or `desc`. |
+| `abs` | `1` sorts by the absolute values of the sort column (`TableState.absolute`), with null values last as in the plain sort; empty (default) sorts by the values. Only the columns of `absolute_sortable` (sortable, of a numeric type, not `frame_order`) use it; others ignore it. |
 | `page` | 1-based page number; a page past the last shows the last. |
 | `page_size` | Rows per page, one of `page_size_choices` (`page_sizes` and `page_size`; only with `page_sizes`); default `page_size`. |
 | `parts` | `1` asks for only the parts that `datatable.js` swaps (`TableState.parts`): `fragment` then draws the `data-dt-part` elements and the headers' `aria-sort`, without the toolbar and the column menus. `datatable.js` sends it with its own reloads (`dt-reload`). |
@@ -358,7 +359,7 @@ header checkbox's matching keys, the export, and anything else built on
     non-null value, or of another type (text, for example), has none.
 - Clicking the column name (or Enter / Space on it) opens the column menu,
   a popover (`popover`, `popovertarget`) holding the column's controls:
-  sort (Asc, Desc, Clear sort), the filter (search, search above values
+  sort (Asc, Desc, and, for a numeric column, an `Abs` checkbox), the filter (search, search above values
   with their counts, or lower and upper bounds), the null filter (a
   segmented control of the Any, Is null, and Is not null buttons, the chosen
   one `aria-pressed="true"`, with the null count; the choice is kept in the
@@ -392,9 +393,15 @@ header checkbox's matching keys, the export, and anything else built on
     were. The header checkbox and the export use the applied filters too;
     a chip's × (reached with Tab) closes the menu, dropping the draft, and
     removes the applied filter.
-- Sorting (Asc, Desc, Clear sort) and copying the name take effect at once
+- Sorting (Asc, Desc) and copying the name take effect at once
   and close the menu; Asc and Desc show the new sort mark and the pressed
-  button before the rows arrive. Outside the column menus, the search box of the whole
+  button before the rows arrive. There is no button back to the default
+  order. While `Abs` is checked, Asc and Desc sort by the absolute values
+  (`abs`); the box shows whether the column is sorted so. Checking or
+  unchecking it on the sorted column sorts it again in the same direction
+  and closes the menu; on another column it waits for Asc or Desc. The
+  paging, the reloads, and the export keep the absolute sort, like the
+  sort and its order. Outside the column menus, the search box of the whole
   table (after 300 ms), a chip's ×, and the `Columns` menu also take effect
   without Apply. Sorting or filtering returns to the first page. Reloads trigger
   `dt-reload` on the container.
@@ -403,7 +410,7 @@ header checkbox's matching keys, the export, and anything else built on
   that change, marked `data-dt-part` (the rows, the footer, the matching
   keys, the sort and filter marks, the histograms, the sort buttons and
   `Clear` of the menus, the filtered count of `Export`, the chips, the limit
-  notice, and the hidden sort / order / page inputs), and the `aria-sort` of
+  notice, and the hidden sort / order / abs / page inputs), and the `aria-sort` of
   the headers. `datatable.js` swaps them itself from the response, so htmx
   neither cleans up nor processes the old and new rows, and the toolbar, the
   menus (an open one keeps its draft and focus), and the header cells stay.
@@ -498,7 +505,7 @@ container, so several tables can share a page.
 | --- | --- |
 | `.dt-root[data-datatable]` | Container (`id` = `table_id`, `hx-get` or `hx-post` = `url`); `data-dt-extra-inputs` with the ids of `extra_inputs`; `data-dt-locked` when locked; `data-dt-pinned` while the left columns are pinned; `data-dt-max-selected` with the limit; `data-dt-export-url` with `export_url`; `data-dt-pin-preference` with `pin_preference`; `aria-busy` and `htmx-request` while reloading. |
 | `[data-dt-part]` | A part of the fragment swapped after the table's own reloads (`state`, `rows`, `footer`, `matching`, `chips`, `limit`, `export-filtered`, and per column `sort-<n>`, `filtered-<n>`, `histogram-<n>`, `sorts-<n>`, `clear-<n>`). |
-| `.dt-state`, `.dt-chips-slot`, `.dt-filter-state` | Holders of the hidden sort / order / page inputs, of the chips, and of a column's filter mark (no box of their own). |
+| `.dt-state`, `.dt-chips-slot`, `.dt-filter-state` | Holders of the hidden sort / order / abs / page inputs, of the chips, and of a column's filter mark (no box of their own). |
 | `.dt-scroll` / `.dt-table` | Scroll box with a fixed header / the table (`table-layout: fixed`). |
 | `.dt-head`, `.dt-column[data-dt-column]`, `.dt-label` | Header line and the column name button opening the menu. |
 | `.dt-resizer[data-dt-resize]` | Handle on the right edge of a header resizing its column (`role="separator"`, named `Resize column <label>`, `aria-valuenow` the width in pixels); `data-dt-resizing` while dragged, also on the container. |
@@ -516,7 +523,7 @@ container, so several tables can share a page.
 | `.dt-export-button`, `.dt-menu[data-dt-export-menu]`, `.dt-export-rows`, `.dt-export-label`, `[data-dt-export][data-dt-export-rows]`, `[data-dt-export-selected-count]`, `.dt-export-error[data-dt-export-error]` | `Export` button, its menu (`id` `<table_id>-export-menu`, named `Export`), a group of rows (named `Filtered rows` / `Selected rows`) with its label and count, a download button (`csv` or `parquet`, `filtered` or `selected`, named `Export <rows> as <format>`), the selected count, and the failure notice (`role="alert"`). |
 | `.dt-chips`, `.dt-chip`, `.dt-chip-label`, `[data-dt-remove-filter]` | List of the filters in use (named `Filters in use`), a chip, its text, and its × button (a JSON array of the parameter names it clears). |
 | `.dt-menu[popover][data-dt-menu]` | A menu: a column's (`id` `<table_id>-menu-<n>`, `role="dialog"`, named `<label> menu`, `data-dt-menu` = the column name) or the `Columns` or `Export` menu (empty `data-dt-menu`); `data-dt-placed` once placed. |
-| `.dt-menu-section`, `.dt-sorts`, `.dt-filter`, `.dt-choices`, `.dt-choice-list`, `.dt-choice`, `.dt-count` | Menu parts: sort buttons (`[data-dt-sort][data-dt-order]`, `aria-pressed`), the filter, the value list (its fieldset and the `<div>` holding the values), a value, and counts. |
+| `.dt-menu-section`, `.dt-sorts`, `.dt-filter`, `.dt-choices`, `.dt-choice-list`, `.dt-choice`, `.dt-count` | Menu parts: sort buttons (`[data-dt-sort][data-dt-order]`, `aria-pressed`) and the `Abs` checkbox (`.dt-sort-absolute`, `[data-dt-sort-absolute]` = the column name), the filter, the value list (its fieldset and the `<div>` holding the values), a value, and counts. |
 | `.dt-nulls`, `.dt-nulls-label`, `[data-dt-null-value]`, `.dt-segmented`, `[data-dt-null]` | The null filter: its label with the null count, the hidden query input holding the choice, and the segmented control (`role="group"`) of its buttons (`aria-pressed`; `data-dt-null` is the value: empty, `is_null`, or `is_not_null`). |
 | `.dt-filter-actions`, `.dt-draft-status[data-dt-draft-status]`, `.dt-icon-button`, `.dt-apply[data-dt-apply]`, `.dt-cancel[data-dt-cancel]`, `.dt-clear-filter[data-dt-clear-filter]` | Under the filters of a column menu: the notice of unapplied changes and the `Apply filters`, `Cancel`, and `Clear the filters of this column` icon buttons. |
 | `[data-dt-copy]` | "Copy column name" button. |

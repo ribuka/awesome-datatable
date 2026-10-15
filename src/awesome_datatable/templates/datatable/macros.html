@@ -131,13 +131,16 @@
 <button type="button" class="dt-icon-button dt-clear-filter" title="Clear the filters of this column" aria-label="Clear the filters of this column" data-dt-clear-filter data-dt-part="clear-{{ index }}"{% if not view.state.is_filtered(column.name) %} disabled{% endif %}><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M6 1.5h4M2.5 3.5h11M4 3.5l.75 11h6.5l.75-11M6.75 6v6M9.25 6v6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
 {%- endmacro %}
 
-{#- The sort buttons of a column menu, a swapped part. -#}
+{#- The sort buttons of a column menu, and the Abs checkbox of a numeric
+    column (TableView.absolute_sortable), a swapped part. -#}
 {% macro _sorts(view, column, index) -%}
   {% set current = view.state.sort_by == column.name %}
   <div class="dt-menu-section dt-sorts" role="group" aria-label="Sort" data-dt-part="sorts-{{ index }}">
     <button type="button" data-dt-sort="{{ column.name }}" data-dt-order="asc" aria-pressed="{{ 'true' if current and not view.state.descending else 'false' }}"><span aria-hidden="true">▲</span> Asc</button>
     <button type="button" data-dt-sort="{{ column.name }}" data-dt-order="desc" aria-pressed="{{ 'true' if current and view.state.descending else 'false' }}"><span aria-hidden="true">▼</span> Desc</button>
-    <button type="button" data-dt-sort="" data-dt-order="asc"{% if not current %} disabled{% endif %}>Clear sort</button>
+    {% if column.name in view.absolute_sortable %}
+      <label class="dt-sort-absolute" title="Sort by the absolute values"><input type="checkbox" data-dt-sort-absolute="{{ column.name }}"{% if current and view.state.absolute %} checked{% endif %}> Abs</label>
+    {% endif %}
   </div>
 {%- endmacro %}
 
@@ -399,11 +402,12 @@
 {% endif %}
 {%- endmacro %}
 
-{#- The hidden sort, order, and page of the view, a swapped part. -#}
+{#- The hidden sort, order, absolute sort, and page of the view, a swapped part. -#}
 {% macro _state(config, view) -%}
 <div class="dt-state" data-dt-part="state" hidden>
   <input type="hidden" name="{{ config.prefix }}sort" value="{{ view.state.sort_by or '' }}" data-dt-query>
   <input type="hidden" name="{{ config.prefix }}order" value="{{ 'desc' if view.state.descending else 'asc' }}" data-dt-query>
+  <input type="hidden" name="{{ config.prefix }}abs" value="{{ '1' if view.state.absolute else '' }}" data-dt-query>
   <input type="hidden" name="{{ config.prefix }}page" value="{{ view.page.number }}" data-dt-query>
 </div>
 {%- endmacro %}

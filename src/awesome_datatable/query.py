@@ -45,6 +45,9 @@ class TableView:
         the filtered columns, over every row of the table.
     types : dict[str, str]
         Type of each shown column (``dtype_label``), keyed by column name.
+    absolute_sortable : frozenset[str]
+        Columns whose menu sorts by the absolute values too
+        (``absolute_sortable``).
     chips : list[FilterChip]
         Column filters in use (``filter_chips``).
     histograms : dict[str, ColumnHistogram]
@@ -62,6 +65,7 @@ class TableView:
     options: dict[str, list[str]]
     counts: ColumnCounts
     types: dict[str, str]
+    absolute_sortable: frozenset[str]
     chips: list[FilterChip]
     histograms: dict[str, ColumnHistogram]
 
@@ -176,8 +180,76 @@ def filter_expression(
     return pl.all_horizontal(conditions).fill_null(False)
 
 
+def absolute_sortable(config: TableConfig, schema: Mapping[str, pl.DataType]) -> frozenset[str]:
+    """Return the columns that can be sorted by their absolute values.
+
+    Parameters
+    ----------
+    config : TableConfig
+        Table settings.
+    schema : Mapping[str, pl.DataType]
+        Column types of the frame.
+
+    Returns
+    -------
+    frozenset[str]
+        Names of the sortable columns of a numeric type, except the
+        ``frame_order`` columns, which keep the frame's order.
+    """
+    return frozenset(
+        name
+        for name, column in config.sortable_columns.items()
+        if not column.frame_order and schema[name].is_numeric()
+    )
+
+
+# The unsigned type of each signed integer type, which holds the absolute value
+# of its smallest value (``-128`` of ``pl.Int8`` is ``128`` of ``pl.UInt8``).
+UNSIGNED_TYPES: dict[type[pl.DataType], type[pl.DataType]] = {
+    pl.Int8: pl.UInt8,
+    pl.Int16: pl.UInt16,
+    pl.Int32: pl.UInt32,
+    pl.Int64: pl.UInt64,
+    pl.Int128: pl.UInt128,
+}
+
+
+def absolute_key(name: str, dtype: pl.DataType) -> pl.Expr:
+    """Return the absolute values of a numeric column as a sort key.
+
+    Parameters
+    ----------
+    name : str
+        Column name.
+    dtype : pl.DataType
+        Numeric type of the column.
+
+    Returns
+    -------
+    pl.Expr
+        ``abs`` of the column, except for a signed integer type, whose
+        values become the unsigned type of the same width
+        (``UNSIGNED_TYPES``), so that the smallest value, whose absolute
+        value the signed type cannot hold, sorts as the largest. A negative
+        value ``v`` becomes ``(-1 - v) + 1``, which never overflows (and
+        needs no negation, which ``pl.Int128`` lacks).
+    """
+    column = pl.col(name)
+    unsigned = UNSIGNED_TYPES.get(dtype.base_type())
+    if unsigned is None:
+        return column.abs()
+    return (
+        pl.when(column < 0)
+        .then((pl.lit(-1, dtype) - column).cast(unsigned) + 1)
+        .otherwise(column.cast(unsigned))
+    )
+
+
 def sort_frame(
-    frame: pl.LazyFrame, state: TableState, config: TableConfig
+    frame: pl.LazyFrame,
+    state: TableState,
+    config: TableConfig,
+    schema: Mapping[str, pl.DataType] | None = None,
 ) -> pl.LazyFrame:
     """Sort a frame by a state's sort column.
 
@@ -186,24 +258,33 @@ def sort_frame(
     frame : pl.LazyFrame
         Rows in the frame's order.
     state : TableState
-        State naming the sort column and direction.
+        State naming the sort column, direction, and absolute sort.
     config : TableConfig
         Table settings.
+    schema : Mapping[str, pl.DataType] | None, default None
+        Column types of the frame; collected from it if ``None`` and needed
+        for an absolute sort.
 
     Returns
     -------
     pl.LazyFrame
-        Rows sorted by the column, with null values last and ties in the
-        frame's order. A ``frame_order`` column keeps the frame's order, or
-        reverses it when descending; without a sort column the order is kept.
+        Rows sorted by the column, or by its absolute values for an absolute
+        sort of an ``absolute_sortable`` column, with null values last and
+        ties in the frame's order. A ``frame_order`` column keeps the frame's
+        order, or reverses it when descending; without a sort column the
+        order is kept. Other columns ignore the absolute sort.
     """
     if state.sort_by is None:
         return frame
     if config.sortable_columns[state.sort_by].frame_order:
         return frame.reverse() if state.descending else frame
-    return frame.sort(
-        state.sort_by, descending=state.descending, nulls_last=True, maintain_order=True
-    )
+    key = pl.col(state.sort_by)
+    if state.absolute:
+        if schema is None:
+            schema = frame.collect_schema()
+        if state.sort_by in absolute_sortable(config, schema):
+            key = absolute_key(state.sort_by, schema[state.sort_by])
+    return frame.sort(key, descending=state.descending, nulls_last=True, maintain_order=True)
 
 
 def matching_rows(
@@ -235,7 +316,9 @@ def matching_rows(
     """
     if schema is None:
         schema = frame.collect_schema()
-    return sort_frame(frame.filter(filter_expression(state, config, schema)), state, config)
+    return sort_frame(
+        frame.filter(filter_expression(state, config, schema)), state, config, schema
+    )
 
 
 def apply_state(
@@ -297,6 +380,7 @@ def apply_state(
         options=summary.options,
         counts=summary.counts,
         types=summary.types,
+        absolute_sortable=absolute_sortable(config, summary.schema),
         chips=filter_chips(state, config),
         histograms=mark_histograms(summary.histograms, state, summary.schema),
     )

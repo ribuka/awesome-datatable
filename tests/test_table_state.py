@@ -88,6 +88,15 @@ def test_table_state_tells_which_columns_are_filtered() -> None:
     assert [name for name in "abcde" if state.is_filtered(name)] == ["a", "b", "c", "d"]
 
 
+def test_parse_state_reads_the_absolute_sort(config: TableConfig) -> None:
+    """``abs`` is ``1`` for an absolute sort; blank or missing sorts by the values."""
+    state = parse_state({"t.sort": ["score"], "t.abs": ["1"]}, config)
+
+    assert state == TableState(sort_by="score", absolute=True)
+    assert not parse_state({"t.sort": ["score"], "t.abs": [""]}, config).absolute
+    assert not parse_state({"t.sort": ["score"]}, config).absolute
+
+
 def test_parse_state_without_default_sort_keeps_frame_order() -> None:
     """A table without a default sort has no sort column."""
     config = TableConfig(table_id="t", key="k", columns=(ColumnConfig("k"),), url="/")
@@ -111,6 +120,7 @@ def test_parse_state_without_default_sort_keeps_frame_order() -> None:
         ({"t.sort": ["missing"]}, "unknown sort column"),
         ({"t.sort": ["note"]}, "unknown sort column"),
         ({"t.order": ["up"]}, "invalid sort order"),
+        ({"t.abs": ["yes"]}, "invalid absolute sort"),
         ({"t.page": ["0"]}, "invalid page"),
         ({"t.page": ["x"]}, "invalid page"),
         ({"t.parts": ["yes"]}, "invalid parts"),

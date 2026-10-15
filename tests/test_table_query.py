@@ -13,6 +13,7 @@ from flat_pca.webui.datatable import (
     ColumnCounts,
     TableConfig,
     TableState,
+    absolute_sortable,
     apply_state,
     choice_options,
     count_values,
@@ -301,6 +302,101 @@ def test_apply_state_sorts_with_nulls_last_and_stable_ties(
     ``key`` is a ``frame_order`` column, so it keeps or reverses the frame.
     """
     assert _keys(frame, state, config) == expected
+
+
+@pytest.fixture
+def signed() -> pl.DataFrame:
+    """Return rows of a signed float, a signed integer, and a text column."""
+    return pl.DataFrame(
+        {
+            "key": ["k1", "k2", "k3", "k4", "k5"],
+            "r": [0.5, -0.9, None, 0.1, -0.5],
+            "n": [-3, 2, 1, None, -1],
+            "text": ["-b", "a", "-c", "d", "e"],
+        }
+    )
+
+
+@pytest.fixture
+def signed_config() -> TableConfig:
+    """Return a selectable table over every column of ``signed``."""
+    return TableConfig(
+        table_id="s",
+        key="key",
+        columns=(
+            ColumnConfig("key", frame_order=True),
+            ColumnConfig("r", filter="number"),
+            ColumnConfig("n"),
+            ColumnConfig("text", filter="text"),
+        ),
+        url="/table",
+        selectable=True,
+    )
+
+
+@pytest.mark.parametrize(
+    ("state", "expected"),
+    [
+        (TableState(sort_by="r", absolute=True), ["k4", "k1", "k5", "k2", "k3"]),
+        (TableState(sort_by="r", descending=True, absolute=True), ["k2", "k1", "k5", "k4", "k3"]),
+        (TableState(sort_by="n", absolute=True), ["k3", "k5", "k2", "k1", "k4"]),
+        (TableState(sort_by="n", descending=True, absolute=True), ["k1", "k2", "k3", "k5", "k4"]),
+        (TableState(sort_by="text", absolute=True), ["k1", "k3", "k2", "k4", "k5"]),
+        (TableState(sort_by="key", descending=True, absolute=True), ["k5", "k4", "k3", "k2", "k1"]),
+    ],
+)
+def test_apply_state_sorts_numeric_columns_by_absolute_values(
+    signed: pl.DataFrame, signed_config: TableConfig, state: TableState, expected: list[str]
+) -> None:
+    """An absolute sort compares |value| of a numeric column, with nulls last and stable ties.
+
+    The text and ``frame_order`` columns ignore it.
+    """
+    assert apply_state(signed, state, signed_config).matching_keys == expected
+    assert sort_frame(signed.lazy(), state, signed_config).collect()["key"].to_list() == expected
+
+
+@pytest.mark.parametrize(
+    ("dtype", "bits"),
+    [(pl.Int8, 8), (pl.Int16, 16), (pl.Int32, 32), (pl.Int64, 64), (pl.Int128, 128)],
+)
+@pytest.mark.parametrize(
+    ("descending", "expected"),
+    [(False, ["k2", "k3", "k1", "k4"]), (True, ["k1", "k3", "k2", "k4"])],
+)
+def test_absolute_sort_puts_the_smallest_integer_farthest_from_zero(
+    dtype: type[pl.DataType], bits: int, descending: bool, expected: list[str]
+) -> None:
+    """The smallest value of a signed integer type sorts as the largest absolute value."""
+    frame = pl.DataFrame(
+        {"key": ["k1", "k2", "k3", "k4"], "n": [-(2 ** (bits - 1)), -1, 2, None]},
+        schema={"key": pl.String, "n": dtype},
+    )
+    config = TableConfig(
+        table_id="s", key="key", columns=(ColumnConfig("key"), ColumnConfig("n")), url="/"
+    )
+    state = TableState(sort_by="n", descending=descending, absolute=True)
+
+    assert sort_frame(frame.lazy(), state, config).collect()["key"].to_list() == expected
+
+
+def test_absolute_sortable_lists_the_numeric_columns(
+    frame: pl.DataFrame, config: TableConfig, signed: pl.DataFrame, signed_config: TableConfig
+) -> None:
+    """Sortable numeric columns sort by absolute values; unsortable and ``frame_order`` ones do not."""
+    unsorted = replace(
+        signed_config,
+        columns=(
+            ColumnConfig("key"),
+            ColumnConfig("r", sortable=False),
+            ColumnConfig("n", frame_order=True),
+        ),
+    )
+
+    assert absolute_sortable(config, frame.schema) == {"count", "score"}
+    assert absolute_sortable(signed_config, signed.schema) == {"r", "n"}
+    assert absolute_sortable(unsorted, signed.schema) == frozenset()
+    assert apply_state(frame, TableState(), config).absolute_sortable == {"count", "score"}
 
 
 def test_apply_state_returns_one_page_and_every_matching_key(
