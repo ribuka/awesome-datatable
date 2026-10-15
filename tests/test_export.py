@@ -15,6 +15,7 @@ from flat_pca.webui.datatable import (
     ColumnConfig,
     ExportFile,
     ExportRequest,
+    ExportRows,
     TableConfig,
     TableState,
     apply_state,
@@ -170,6 +171,28 @@ def test_selected_export_keeps_every_selected_row_in_the_sort_order(
 ) -> None:
     """Selected rows are exported also when the filters hide them, in the table's order."""
     request = ExportRequest("csv", "selected", state, ("k4", "k1", "k2", "missing"))
+
+    assert _keys(export_rows(frame, request, config)) == expected
+
+
+@pytest.mark.parametrize(
+    ("rows", "expected"),
+    [("filtered", ["k2", "k1", "k4"]), ("selected", ["k2", "k1", "k4", "k3"])],
+)
+def test_export_keeps_the_absolute_sort(rows: ExportRows, expected: list[str]) -> None:
+    """Both exports sort by the absolute values when the table does."""
+    frame = pl.DataFrame({"key": ["k1", "k2", "k3", "k4"], "r": [0.5, -0.9, None, -0.1]})
+    config = TableConfig(
+        table_id="s",
+        key="key",
+        columns=(ColumnConfig("key"), ColumnConfig("r", filter="number")),
+        url="/table",
+        selectable=True,
+    )
+    state = parse_state(
+        {"s.sort": ["r"], "s.order": ["desc"], "s.abs": ["1"], "s.min__r": ["-1"]}, config
+    )
+    request = ExportRequest("csv", rows, state, ("k1", "k2", "k3", "k4"))
 
     assert _keys(export_rows(frame, request, config)) == expected
 

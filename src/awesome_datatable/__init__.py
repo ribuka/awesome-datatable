@@ -36,6 +36,7 @@ from .histograms import (
 from .pagination import Page, paginate
 from .query import (
     TableView,
+    absolute_sortable,
     apply_state,
     filter_expression,
     key_text,
@@ -70,6 +71,7 @@ __all__ = [
     "TableView",
     "TopValue",
     "TopValues",
+    "absolute_sortable",
     "apply_state",
     "choice_options",
     "column_histograms",

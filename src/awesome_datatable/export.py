@@ -222,7 +222,11 @@ def export_rows(
     if request.rows == "filtered":
         rows = matching_rows(lazy, request.state, config)
     else:
-        unfiltered = TableState(sort_by=request.state.sort_by, descending=request.state.descending)
+        unfiltered = TableState(
+            sort_by=request.state.sort_by,
+            descending=request.state.descending,
+            absolute=request.state.absolute,
+        )
         rows = matching_rows(lazy, unfiltered, config).filter(
             key_text(config).is_in(list(request.selected))
         )

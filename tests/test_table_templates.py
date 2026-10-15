@@ -95,6 +95,7 @@ def test_fragment_shows_controls_rows_and_pages(
 
     assert '<input type="hidden" name="t.sort" value="score" data-dt-query>' in html
     assert '<input type="hidden" name="t.order" value="desc" data-dt-query>' in html
+    assert '<input type="hidden" name="t.abs" value="" data-dt-query>' in html
     assert '<input type="hidden" name="t.page" value="1" data-dt-query>' in html
     assert '["k4", "k1"]</script>' in html
     assert html.count('aria-sort="descending"') == 1
@@ -154,8 +155,24 @@ def test_fragment_opens_a_menu_from_each_column_name(
     count_menu = _menu(html, "count")
     assert 'data-dt-order="asc" aria-pressed="true"' in count_menu
     assert 'data-dt-order="desc" aria-pressed="false"' in count_menu
-    assert 'data-dt-sort="" data-dt-order="asc">Clear sort' in count_menu
-    assert 'data-dt-sort="" data-dt-order="asc" disabled>Clear sort' in _menu(html, "score")
+    assert "Clear sort" not in html
+    assert '<input type="checkbox" data-dt-sort-absolute="count"> Abs</label>' in count_menu
+
+
+def test_fragment_offers_the_absolute_sort_of_numeric_columns(
+    environment: Environment, config: TableConfig, frame: pl.DataFrame
+) -> None:
+    """Only numeric columns have Abs, checked on the column sorted by absolute values."""
+    state = parse_state({"t.sort": ["score"], "t.order": ["desc"], "t.abs": ["1"]}, config)
+    view = apply_state(frame, state, config)
+
+    html = _render(environment, "{{ fragment(config, view) }}", config=config, view=view)
+
+    assert '<input type="hidden" name="t.abs" value="1" data-dt-query>' in html
+    assert '<input type="checkbox" data-dt-sort-absolute="score" checked> Abs' in _menu(html, "score")
+    assert '<input type="checkbox" data-dt-sort-absolute="count"> Abs' in _menu(html, "count")
+    for name in ("key", "name", "group", "when", "note"):
+        assert "data-dt-sort-absolute" not in _menu(html, name)
 
 
 def _null_choice(menu: str) -> tuple[str, str]:

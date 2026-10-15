@@ -551,6 +551,12 @@
   color: var(--dt-accent);
 }
 
+.dt-sort-absolute {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
 /* A line of the "Export" menu: the rows with their count, then a button
    per file format. */
 .dt-export-rows {

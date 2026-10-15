@@ -12,6 +12,7 @@ from .config import ColumnConfig, TableConfig
 
 SORT_PARAMETER = "sort"
 ORDER_PARAMETER = "order"
+ABSOLUTE_PARAMETER = "abs"
 PAGE_PARAMETER = "page"
 PAGE_SIZE_PARAMETER = "page_size"
 SEARCH_PARAMETER = "search"
@@ -50,6 +51,9 @@ class TableState:
         Column to sort by, or ``None`` for the frame's order.
     descending : bool, default False
         Whether to sort in descending order.
+    absolute : bool, default False
+        Whether to sort by the absolute values of the sort column, which
+        applies only to the columns of ``absolute_sortable``.
     page : int, default 1
         1-based number of the shown page.
     page_size : int | None, default None
@@ -78,6 +82,7 @@ class TableState:
 
     sort_by: str | None = None
     descending: bool = False
+    absolute: bool = False
     page: int = 1
     page_size: int | None = None
     parts: bool = False
@@ -251,7 +256,9 @@ def _parse_filters(
     upper: dict[str, Bound] = {}
     nulls: dict[str, NullFilter] = {}
     for key, value in values.items():
-        if key in (SORT_PARAMETER, ORDER_PARAMETER, PAGE_PARAMETER, PARTS_PARAMETER):
+        if key in (
+            SORT_PARAMETER, ORDER_PARAMETER, ABSOLUTE_PARAMETER, PAGE_PARAMETER, PARTS_PARAMETER
+        ):
             continue
         if key == PAGE_SIZE_PARAMETER and config.page_sizes:
             continue
@@ -289,7 +296,8 @@ def parse_state(parameters: Mapping[str, Sequence[str]], config: TableConfig) ->
 
     Only parameters named ``<table_id>.<name>`` belong to the table; others
     are ignored, so several tables can share one query string. The names are
-    ``sort``, ``order`` (``asc`` or ``desc``), ``page`` (a positive integer),
+    ``sort``, ``order`` (``asc`` or ``desc``), ``abs`` (``1`` to sort by
+    the absolute values), ``page`` (a positive integer),
     ``page_size`` (one of ``TableConfig.page_size_choices``), ``parts``
     (``1`` for only the swapped parts), ``search`` (only with
     ``TableConfig.search``), and, per filtered column, ``q__<column>`` (``"text"`` and
@@ -315,7 +323,7 @@ def parse_state(parameters: Mapping[str, Sequence[str]], config: TableConfig) ->
     ------
     ValueError
         If a parameter of the table is unknown (``search`` of a table
-        without the search box too), names a column without that filter, or has an unparsable value, sort column, order, page, page size, or parts.
+        without the search box too), names a column without that filter, or has an unparsable value, sort column, order, absolute sort, page, page size, or parts.
     """
     every = {
         key.removeprefix(config.prefix): raw
@@ -331,6 +339,9 @@ def parse_state(parameters: Mapping[str, Sequence[str]], config: TableConfig) ->
     order = values.get(ORDER_PARAMETER, "") or "asc"
     if order not in ("asc", "desc"):
         raise ValueError(f"invalid sort order: {order!r}")
+    absolute = values.get(ABSOLUTE_PARAMETER, "").strip()
+    if absolute not in ("", "1"):
+        raise ValueError(f"invalid absolute sort: {absolute!r}")
     page = values.get(PAGE_PARAMETER, "").strip() or "1"
     if not (page.isascii() and page.isdigit()) or int(page) < 1:
         raise ValueError(f"invalid page: {page!r}")
@@ -349,6 +360,7 @@ def parse_state(parameters: Mapping[str, Sequence[str]], config: TableConfig) ->
     return TableState(
         sort_by=sort_by,
         descending=order == "desc",
+        absolute=absolute == "1",
         page=int(page),
         page_size=int(page_size) if page_size else None,
         parts=parts == "1",
