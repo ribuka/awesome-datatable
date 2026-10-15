@@ -113,6 +113,8 @@ Update this document whenever the component gains a feature.
 
    `triggers` adds htmx triggers that reload the table. `locked` shows the
    selection with every checkbox disabled (the filters and pages still work).
+   `selection_attributes` adds attributes to the hidden selection input, such
+   as `{"data-changes": "..."}` for the form it joins (`selection_form`).
    To show the table without a second request, call the container with the
    first fragment (the view of `parse_state({}, config)`) as its block; it
    then does not load it again:
@@ -483,6 +485,9 @@ header checkbox's matching keys, the export, and anything else built on
   container. It bubbles; `event.detail.keys` holds the selected keys and
   `event.detail.max` the limit (`null` without one). The footer already
   shows the count, so a page needs the event only to act on the selection.
+- A page that sets the selection input itself dispatches
+  `datatable:selection-sync` on the container, and the checkboxes show the
+  selection again.
 
 ## Elements and classes
 

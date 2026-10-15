@@ -224,6 +224,16 @@
     }
   });
 
+  // A page that sets the selection input itself, such as by putting a form
+  // back to its shown conditions, dispatches `datatable:selection-sync` on
+  // the container: the checkboxes show the selection again.
+  document.addEventListener("datatable:selection-sync", (event) => {
+    const root = event.target;
+    if (root.matches?.("[data-datatable]") && root.dataset.dtSelection && root.querySelector(".dt-table")) {
+      syncChecks(root);
+    }
+  });
+
   function isChosen(control) {
     return control.type === "checkbox";
   }

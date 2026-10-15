@@ -13,6 +13,8 @@
       and pages work.
     - triggers: further htmx triggers that reload the table, such as
       "catalog-updated from:body".
+    - selection_attributes: further attributes of the hidden selection
+      input, such as {"data-changes": "..."} for the form it joins.
     The query parameters of a request are the fragment's `data-dt-query`
     controls, which datatable.js puts in on `htmx:configRequest` (htmx's own
     `hx-include` takes time growing with the square of the inputs, and a
@@ -20,7 +22,7 @@
     reloads) asks for the swapped parts only; `dt-refresh` reloads the
     whole fragment. The requests use `config.method` and also send the
     inputs named by `config.extra_inputs` (`data-dt-extra-inputs`). -#}
-{% macro container(config, selected=[], locked=false, triggers="") -%}
+{% macro container(config, selected=[], locked=false, triggers="", selection_attributes={}) -%}
 <div id="{{ config.table_id }}" class="dt-root" data-datatable hx-{{ config.method }}="{{ config.url }}"
      hx-target="this" hx-swap="innerHTML" hx-sync="this:replace"
      hx-trigger="{% if caller is not defined %}load, {% endif %}dt-reload, dt-refresh{% if triggers %}, {{ triggers }}{% endif %}"
@@ -38,7 +40,7 @@
 </div>
 {% if config.selectable -%}
 <input type="hidden" id="{{ config.table_id }}-selection" name="{{ config.selection_name }}" value='{{ selected|list|tojson }}'
-       {%- if config.selection_form %} form="{{ config.selection_form }}"{% endif %}>
+       {%- if config.selection_form %} form="{{ config.selection_form }}"{% endif %}{{ selection_attributes|xmlattr }}>
 {%- endif %}
 {%- endmacro %}
 
