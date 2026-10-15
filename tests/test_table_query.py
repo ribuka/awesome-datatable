@@ -356,6 +356,30 @@ def test_apply_state_sorts_numeric_columns_by_absolute_values(
     assert sort_frame(signed.lazy(), state, signed_config).collect()["key"].to_list() == expected
 
 
+@pytest.mark.parametrize(
+    ("dtype", "bits"),
+    [(pl.Int8, 8), (pl.Int16, 16), (pl.Int32, 32), (pl.Int64, 64), (pl.Int128, 128)],
+)
+@pytest.mark.parametrize(
+    ("descending", "expected"),
+    [(False, ["k2", "k3", "k1", "k4"]), (True, ["k1", "k3", "k2", "k4"])],
+)
+def test_absolute_sort_puts_the_smallest_integer_farthest_from_zero(
+    dtype: type[pl.DataType], bits: int, descending: bool, expected: list[str]
+) -> None:
+    """The smallest value of a signed integer type sorts as the largest absolute value."""
+    frame = pl.DataFrame(
+        {"key": ["k1", "k2", "k3", "k4"], "n": [-(2 ** (bits - 1)), -1, 2, None]},
+        schema={"key": pl.String, "n": dtype},
+    )
+    config = TableConfig(
+        table_id="s", key="key", columns=(ColumnConfig("key"), ColumnConfig("n")), url="/"
+    )
+    state = TableState(sort_by="n", descending=descending, absolute=True)
+
+    assert sort_frame(frame.lazy(), state, config).collect()["key"].to_list() == expected
+
+
 def test_absolute_sortable_lists_the_numeric_columns(
     frame: pl.DataFrame, config: TableConfig, signed: pl.DataFrame, signed_config: TableConfig
 ) -> None:

@@ -203,6 +203,48 @@ def absolute_sortable(config: TableConfig, schema: Mapping[str, pl.DataType]) ->
     )
 
 
+# The unsigned type of each signed integer type, which holds the absolute value
+# of its smallest value (``-128`` of ``pl.Int8`` is ``128`` of ``pl.UInt8``).
+UNSIGNED_TYPES: dict[type[pl.DataType], type[pl.DataType]] = {
+    pl.Int8: pl.UInt8,
+    pl.Int16: pl.UInt16,
+    pl.Int32: pl.UInt32,
+    pl.Int64: pl.UInt64,
+    pl.Int128: pl.UInt128,
+}
+
+
+def absolute_key(name: str, dtype: pl.DataType) -> pl.Expr:
+    """Return the absolute values of a numeric column as a sort key.
+
+    Parameters
+    ----------
+    name : str
+        Column name.
+    dtype : pl.DataType
+        Numeric type of the column.
+
+    Returns
+    -------
+    pl.Expr
+        ``abs`` of the column, except for a signed integer type, whose
+        values become the unsigned type of the same width
+        (``UNSIGNED_TYPES``), so that the smallest value, whose absolute
+        value the signed type cannot hold, sorts as the largest. A negative
+        value ``v`` becomes ``(-1 - v) + 1``, which never overflows (and
+        needs no negation, which ``pl.Int128`` lacks).
+    """
+    column = pl.col(name)
+    unsigned = UNSIGNED_TYPES.get(dtype.base_type())
+    if unsigned is None:
+        return column.abs()
+    return (
+        pl.when(column < 0)
+        .then((pl.lit(-1, dtype) - column).cast(unsigned) + 1)
+        .otherwise(column.cast(unsigned))
+    )
+
+
 def sort_frame(
     frame: pl.LazyFrame,
     state: TableState,
@@ -241,7 +283,7 @@ def sort_frame(
         if schema is None:
             schema = frame.collect_schema()
         if state.sort_by in absolute_sortable(config, schema):
-            key = key.abs()
+            key = absolute_key(state.sort_by, schema[state.sort_by])
     return frame.sort(key, descending=state.descending, nulls_last=True, maintain_order=True)
 
 
