@@ -31,6 +31,7 @@
      {%- if config.export_url %} data-dt-export-url="{{ config.export_url }}"{% endif %}
      {%- if config.extra_inputs %} data-dt-extra-inputs="{{ config.extra_inputs|join(' ') }}"{% endif %}
      {%- if config.pin_preference %} data-dt-pin-preference="{{ config.pin_preference }}"{% endif %}
+     data-dt-query-columns="{{ config.query_columns|e }}"
      {%- if locked %} data-dt-locked{% endif %}>
   {%- if caller is defined %}
   {{ caller() }}

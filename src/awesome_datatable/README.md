@@ -424,6 +424,21 @@ header checkbox's matching keys, the export, and anything else built on
   not fit the table (columns changed since) loads the whole fragment instead
   (`dt-refresh` on the container). A reload triggered by the page
   (`triggers`, such as a catalog update) swaps the whole fragment with htmx.
+- The applied query (sort, order, absolute sort, page, rows per page, search,
+  and filters) is kept in `sessionStorage` under
+  `datatable:query:<path>#<table_id>` (per tab, page path, and table id)
+  after each request of the table succeeds, with the columns of
+  `TableConfig.query_columns` (`data-dt-query-columns`). A table shows the
+  kept query again when the page is opened anew in that tab: a container
+  that loads its first fragment (`load`, `intersect once`) asks for it at
+  once, and a table drawn with the page loads it with `dt-refresh` (on
+  `DOMContentLoaded`, before the page's scripts run on `pageshow`, or on
+  `htmx:load` for a table put in the page later), or, while it sits in a
+  `[hidden]` element, with its first whole load. While the columns differ
+  from the kept ones, only the rows per page and the search are asked for. A
+  failed request of the kept query forgets it and loads the table again
+  with its applied query. Without storage the query lasts until the page is
+  left.
 - A table drawn with the page (the container called with its first
   fragment) gets the remembered hidden columns, pinning, and column widths
   and shows the selection as soon as `datatable.js` runs, and one that htmx
@@ -450,7 +465,7 @@ header checkbox's matching keys, the export, and anything else built on
   value puts the current page back. The number of rows per page is
   `page_size`; with `page_sizes`, `Rows per page` (a `select`) after the page
   controls chooses it among `page_size_choices` and reloads the page holding
-  the first row shown. The choice lasts until the page is left.
+  the first row shown. The choice is kept with the query (see above).
 - The selection of a selectable table spans pages and filters. It is a JSON
   array in the hidden input `#<table_id>-selection` (named `selection_name`),
   outside the reloaded fragment, so a form or `hx-include` can send it as one
@@ -503,7 +518,7 @@ container, so several tables can share a page.
 
 | Selector | Element |
 | --- | --- |
-| `.dt-root[data-datatable]` | Container (`id` = `table_id`, `hx-get` or `hx-post` = `url`); `data-dt-extra-inputs` with the ids of `extra_inputs`; `data-dt-locked` when locked; `data-dt-pinned` while the left columns are pinned; `data-dt-max-selected` with the limit; `data-dt-export-url` with `export_url`; `data-dt-pin-preference` with `pin_preference`; `aria-busy` and `htmx-request` while reloading. |
+| `.dt-root[data-datatable]` | Container (`id` = `table_id`, `hx-get` or `hx-post` = `url`); `data-dt-extra-inputs` with the ids of `extra_inputs`; `data-dt-locked` when locked; `data-dt-pinned` while the left columns are pinned; `data-dt-max-selected` with the limit; `data-dt-export-url` with `export_url`; `data-dt-pin-preference` with `pin_preference`; `data-dt-query-columns` with `query_columns`; `aria-busy` and `htmx-request` while reloading. |
 | `[data-dt-part]` | A part of the fragment swapped after the table's own reloads (`state`, `rows`, `footer`, `matching`, `chips`, `limit`, `export-filtered`, and per column `sort-<n>`, `filtered-<n>`, `histogram-<n>`, `sorts-<n>`, `clear-<n>`). |
 | `.dt-state`, `.dt-chips-slot`, `.dt-filter-state` | Holders of the hidden sort / order / abs / page inputs, of the chips, and of a column's filter mark (no box of their own). |
 | `.dt-scroll` / `.dt-table` | Scroll box with a fixed header / the table (`table-layout: fixed`). |
