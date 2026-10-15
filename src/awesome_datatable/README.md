@@ -15,7 +15,9 @@ paged on the server and shown with htmx.
   screen for the explained variance table of the chosen fit run
   (`services/explained_variance_table.py`, `routes/model.py`) and the
   coefficient table of component k (`services/coefficient_table.py`,
-  `routes/model.py`), and the score
+  `routes/model.py`), the insight screen for the ranking of the PCs by
+  their correlation with a target (`services/insight_ranking_table.py`,
+  `routes/insight.py`), and the score
   and T²/Q screens for the files of the points chosen in their figures
   (`services/point_table.py`, `routes/point_table.py`, `routes/scores.py`,
   `routes/monitoring.py`; `extra_inputs` and `method="post"`). flat-pca gives
