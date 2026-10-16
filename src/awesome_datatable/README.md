@@ -41,11 +41,21 @@ Update this document whenever the component gains a feature.
 | `counts.py` | `ColumnCounts` and `count_values`: rows of each choice value and null values per filtered column, for the column menus. |
 | `pagination.py` | `Page` and `paginate`: the page among the rows. |
 | `formatting.py` | `format_value`: the cell text (`dt_cell` filter); `dtype_label`: the column type under each column name. |
-| `environment.py` | `configure_environment`: registers the templates, the filter, and the "Export" button's icon (`dt_export_icon`) with a Jinja2 environment; `TEMPLATES_DIR`, `STATIC_DIR`. |
+| `parameters.py` | `parameter_lists`: request parameters (an object with `getlist`, or a mapping from each name to its values) → every value of each name as text, for `parse_state` and `parse_export`. |
+| `environment.py` | `configure_environment`: registers the templates, the filter, and the "Export" button's icon (`dt_export_icon`) with a Jinja2 environment; `STATIC_DIR`. |
 | `templates/datatable/macros.html` | The `container` and `fragment` macros. |
 | `static/datatable.js`, `static/datatable.css` | Browser behavior and look. |
 
 ## Use
+
+The public API is what the package itself exports (`__all__` of
+`__init__.py`): the settings, the parsers, `apply_state`,
+`summarize_table`, the export functions, `configure_environment`,
+`STATIC_DIR`, `MEDIA_TYPES`, `format_value`, and the types of their
+arguments, results, and of the fields of `TableView`. Import them from the
+package (`from flat_pca.webui.datatable import ...`); the submodules are
+internal and may change without notice, and only the package's own unit
+tests import them.
 
 1. Configure the Jinja2 environment once and serve `STATIC_DIR`:
 
@@ -68,7 +78,9 @@ Update this document whenever the component gains a feature.
    )
    ```
 
-2. Describe the table:
+2. Describe the table. Every `TableConfig` argument and every
+   `ColumnConfig` argument but `name` is keyword-only (a positional one is a
+   `TypeError`), so that adding a setting never shifts the others:
 
    ```python
    config = TableConfig(
@@ -108,7 +120,7 @@ Update this document whenever the component gains a feature.
 
    ```jinja
    {% from "datatable/macros.html" import container %}
-   {{ container(config, selected, locked=false, triggers="catalog-updated from:body") }}
+   {{ container(config, selected=selected, locked=false, triggers="catalog-updated from:body") }}
    ```
 
    `triggers` adds htmx triggers that reload the table. `locked` shows the
@@ -120,15 +132,20 @@ Update this document whenever the component gains a feature.
    then does not load it again:
 
    ```jinja
-   {% call container(config, selected) %}{{ fragment(config, view, selected) }}{% endcall %}
+   {% call container(config, selected=selected) %}{{ fragment(config, view, selected=selected) }}{% endcall %}
    ```
+
+   Jinja2 macros cannot make their arguments keyword-only, so the macros
+   keep this rule instead: a new argument is added at the end, and the order
+   of the existing ones never changes. Callers pass every argument after
+   the first by keyword (`selected=`, `locked=`, ...), except the `view` of
+   `fragment`.
 
 4. Answer the fragment request with a thin route:
 
    ```python
-   parameters = {key: request.query_params.getlist(key) for key in request.query_params}
    try:
-       state = parse_state(parameters, config)   # ValueError -> 400
+       state = parse_state(request.query_params, config)   # ValueError -> 400
    except ValueError as error:
        raise HTTPException(status_code=400, detail=str(error)) from error
    view = apply_state(frame, state, config, summary)  # frame: DataFrame or LazyFrame
@@ -136,8 +153,15 @@ Update this document whenever the component gains a feature.
 
    ```jinja
    {% from "datatable/macros.html" import fragment %}
-   {{ fragment(config, view, selected) }}
+   {{ fragment(config, view, selected=selected) }}
    ```
+
+   `parse_state` and `parse_export` take the request's parameters as they
+   are: any object whose `getlist` gives every value of a name, read through
+   it first (Starlette's `QueryParams` and `FormData`, werkzeug's
+   `MultiDict`; no web framework is imported), or a mapping from each name to
+   its values (`parse_state({}, config)` for the first view, or tests). Each
+   value is read as `str`.
 
    The frame is every row in its default order. `summary` is
    `summarize_table(frame, config, options)`: the column types, the choices
@@ -155,9 +179,8 @@ Update this document whenever the component gains a feature.
 
    ```python
    form = await request.form()
-   parameters = {key: form.getlist(key) for key in form}
    try:
-       export = parse_export(parameters, config)  # ValueError -> 400
+       export = parse_export(form, config)  # ValueError -> 400
    except ValueError as error:
        raise HTTPException(status_code=400, detail=str(error)) from error
    file = export_file(frame, export, config, datetime.now().astimezone())

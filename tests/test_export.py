@@ -21,12 +21,12 @@ from flat_pca.webui.datatable import (
     apply_state,
     export_file,
     export_filename,
-    export_rows,
     file_content,
     parse_export,
     parse_selection,
     parse_state,
 )
+from flat_pca.webui.datatable.export import export_rows
 
 MOMENT = datetime(2026, 10, 10, 9, 5, 7, tzinfo=UTC)
 

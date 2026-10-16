@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, get_args
@@ -13,6 +13,7 @@ from urllib.parse import quote
 import polars as pl
 
 from .config import TableConfig
+from .parameters import Parameters, parameter_lists
 from .query import key_text, matching_rows
 from .state import TableState, parse_state
 
@@ -150,7 +151,7 @@ def parse_selection(text: str) -> tuple[str, ...]:
     return tuple(keys)
 
 
-def parse_export(parameters: Mapping[str, Sequence[str]], config: TableConfig) -> ExportRequest:
+def parse_export(parameters: Parameters, config: TableConfig) -> ExportRequest:
     """Build an ``ExportRequest`` from the fields of an export.
 
     The fields are the table's query parameters (``parse_state``; ``page``
@@ -160,8 +161,10 @@ def parse_export(parameters: Mapping[str, Sequence[str]], config: TableConfig) -
 
     Parameters
     ----------
-    parameters : Mapping[str, Sequence[str]]
-        Form fields with every value of each name.
+    parameters : Parameters
+        Form fields with every value of each name: an object with
+        ``getlist`` (such as Starlette's ``FormData``) or a mapping from each
+        name to its values. Values are read as ``str``.
     config : TableConfig
         Table settings.
 
@@ -177,19 +180,20 @@ def parse_export(parameters: Mapping[str, Sequence[str]], config: TableConfig) -
         of a table without selection are asked for, the selection is not a
         JSON array of strings, or ``parse_state`` rejects the other fields.
     """
+    fields = parameter_lists(parameters)
     format_key = config.prefix + EXPORT_FORMAT_PARAMETER
     rows_key = config.prefix + EXPORT_ROWS_PARAMETER
-    file_format = _choice(parameters.get(format_key, ()), EXPORT_FORMATS, format_key)
-    rows = _choice(parameters.get(rows_key, ()), EXPORT_ROWS, rows_key)
+    file_format = _choice(fields.get(format_key, ()), EXPORT_FORMATS, format_key)
+    rows = _choice(fields.get(rows_key, ()), EXPORT_ROWS, rows_key)
     state = parse_state(
-        {key: raw for key, raw in parameters.items() if key not in (format_key, rows_key)},
+        {key: raw for key, raw in fields.items() if key not in (format_key, rows_key)},
         config,
     )
     if rows == "filtered":
         return ExportRequest(file_format, rows, state)
     if not config.selectable:
         raise ValueError("a table without selection has no selected rows")
-    raw = parameters.get(config.selection_name, ())
+    raw = fields.get(config.selection_name, ())
     return ExportRequest(file_format, rows, state, parse_selection(raw[-1] if raw else "[]"))
 
 

@@ -45,7 +45,7 @@ def test_container_loads_the_fragment_and_keeps_the_selection(
     """The container reloads itself; the selection input sits outside it."""
     html = _render(
         environment,
-        '{{ container(config, ["k1"], locked=true, triggers="data-changed from:body") }}',
+        '{{ container(config, selected=["k1"], locked=true, triggers="data-changed from:body") }}',
         config=config,
     )
 
@@ -107,7 +107,7 @@ def test_fragment_shows_controls_rows_and_pages(
     view = apply_state(frame, state, config)
 
     html = _render(
-        environment, "{{ fragment(config, view, selected) }}", config=config, view=view, selected={"k4"}
+        environment, "{{ fragment(config, view, selected=selected) }}", config=config, view=view, selected={"k4"}
     )
 
     assert '<input type="hidden" name="t.sort" value="score" data-dt-query>' in html
@@ -380,7 +380,7 @@ def test_fragment_footer_shows_the_shape_and_the_selection(
     """The footer has the matching rows and columns, the count, and Clear."""
     state = parse_state({"t.eq__group": ["a"]}, config)
     view = apply_state(frame, state, config)
-    call = "{{ fragment(config, view, selected) }}"
+    call = "{{ fragment(config, view, selected=selected) }}"
 
     some = _footer(_render(environment, call, config=config, view=view, selected=["k2", "k3"]))
     none = _footer(_render(environment, call, config=config, view=view, selected=[]))
@@ -494,7 +494,7 @@ def test_fragment_without_limit_shows_no_limit_state(
     view = apply_state(frame, TableState(sort_by="key"), config)
 
     html = _render(
-        environment, "{{ fragment(config, view, selected) }}", config=config, view=view, selected={"k1"}
+        environment, "{{ fragment(config, view, selected=selected) }}", config=config, view=view, selected={"k1"}
     )
 
     assert "data-dt-limit" not in html
@@ -511,7 +511,7 @@ def test_fragment_below_the_limit_allows_selecting(
     view = apply_state(frame, state, limited)
 
     html = _render(
-        environment, "{{ fragment(config, view, selected) }}", config=limited, view=view, selected=["k1"]
+        environment, "{{ fragment(config, view, selected=selected) }}", config=limited, view=view, selected=["k1"]
     )
 
     assert "hidden" in _limit_notice(html)
@@ -529,7 +529,7 @@ def test_fragment_at_the_limit_disables_unselected_rows(
 
     html = _render(
         environment,
-        "{{ fragment(config, view, selected) }}",
+        "{{ fragment(config, view, selected=selected) }}",
         config=limited,
         view=view,
         selected=["k1", "k3"],
@@ -549,7 +549,7 @@ def test_fragment_header_checkbox_follows_the_limit(
     limited = replace(config, max_selected=3)
     every = apply_state(frame, TableState(sort_by="key"), limited)
     group_a = apply_state(frame, parse_state({"t.eq__group": ["a"]}, limited), limited)
-    call = "{{ fragment(config, view, selected) }}"
+    call = "{{ fragment(config, view, selected=selected) }}"
 
     over = _render(environment, call, config=limited, view=every, selected=["k1"])
     fits = _render(environment, call, config=limited, view=group_a, selected=["k2"])
@@ -569,7 +569,7 @@ def test_fragment_counts_keys_differing_only_in_case(environment: Environment) -
         table_id="c", key="k", columns=(ColumnConfig("k"),), url="/", selectable=True, max_selected=2
     )
     view = apply_state(frame, TableState(), config)
-    call = "{{ fragment(config, view, selected) }}"
+    call = "{{ fragment(config, view, selected=selected) }}"
 
     full = _render(environment, call, config=config, view=view, selected=["A", "a"])
     single = replace(config, max_selected=1)
@@ -813,7 +813,7 @@ def test_fragment_has_an_export_menu_of_the_filtered_and_selected_rows(
     view = apply_state(frame, parse_state({"t.eq__group": ["a"]}, exporting), exporting)
 
     html = _render(
-        environment, "{{ fragment(config, view, selected) }}", config=exporting, view=view, selected={"k2", "k3", "k4"}
+        environment, "{{ fragment(config, view, selected=selected) }}", config=exporting, view=view, selected={"k2", "k3", "k4"}
     )
 
     assert 'class="dt-toolbar"' in html
@@ -858,7 +858,7 @@ def test_fragment_export_menu_disables_rows_without_any(
 
     menu = _export_menu(_render(environment, "{{ fragment(config, view) }}", config=exporting, view=view))
     none_matching = _export_menu(
-        _render(environment, "{{ fragment(config, view, ['k1']) }}", config=exporting, view=empty)
+        _render(environment, "{{ fragment(config, view, selected=['k1']) }}", config=exporting, view=empty)
     )
 
     assert re.findall(r'data-dt-export-rows="(\w+)"[^>]*?( disabled)?>', menu) == [
@@ -959,7 +959,7 @@ def test_container_called_with_a_block_holds_it_and_does_not_load(
 
     html = _render(
         environment,
-        '{% call container(config, [], triggers="data-changed from:body") %}'
+        '{% call container(config, triggers="data-changed from:body") %}'
         "{{ fragment(config, view) }}{% endcall %}",
         config=config,
         view=view,
@@ -1034,7 +1034,7 @@ def test_fragment_of_the_parts_draws_only_the_swapped_parts(
     )
     view = apply_state(frame, parse_state({**parameters, "t.parts": ["1"]}, config), config)
 
-    html = _render(environment, "{{ fragment(config, view, ['k1']) }}", config=config, view=view)
+    html = _render(environment, "{{ fragment(config, view, selected=['k1']) }}", config=config, view=view)
 
     parts = re.findall(r'data-dt-part="([^"]+)"', html)
     assert parts and sorted(parts) == sorted(re.findall(r'data-dt-part="([^"]+)"', whole))
