@@ -1,0 +1,157 @@
+"""Browser tests of the data table's selection limit in the demo app."""
+
+from __future__ import annotations
+
+import pytest
+from datatable_menu import open_column_menu
+from playwright.sync_api import Locator, Page, expect
+
+MAX_SELECTED = 2
+# At most MAX_SELECTED selected files, two rows per page.
+pytestmark = [pytest.mark.e2e, pytest.mark.table_config(page_size=2, max_selected=MAX_SELECTED)]
+
+
+def _file_stems(page: Page) -> Locator:
+    """Return the file name cells of the file table, in display order."""
+    return page.locator("#files tbody tr td:nth-child(2)")
+
+
+def _check(page: Page, stem: str) -> Locator:
+    """Return the row checkbox of the file ``stem``."""
+    return page.get_by_label(f"Select {stem}", exact=True)
+
+
+def _search(page: Page, text: str) -> None:
+    """Search the file names from the search box above the table."""
+    page.locator("#files").get_by_role("searchbox", name="Search").fill(text)
+
+
+def _limit_notice(page: Page) -> Locator:
+    """Return the notice that the selection limit is reached."""
+    return page.locator("#files [data-dt-limit]")
+
+
+def test_limit_disables_unselected_rows_across_pages_and_filters(
+    page: Page, server_url: str
+) -> None:
+    """At the limit only selected rows can be changed, after paging and filtering too."""
+    page.goto(server_url)
+    stems = _file_stems(page)
+    expect(stems).to_have_text(["run-1", "run-2"])
+    header = page.get_by_label("Select all filtered files")
+    expect(_limit_notice(page)).to_be_hidden()
+    # Selecting all three files would pass the limit; a click in its cell does nothing.
+    expect(header).to_be_disabled()
+    cell = page.locator("#files thead th.dt-check")
+    expect(cell).not_to_have_css("cursor", "pointer")
+    cell.click(position={"x": 2, "y": 2})
+    expect(header).not_to_be_checked()
+    expect(page.locator("#files [data-dt-selected-count]")).to_have_text("0 / 2 selected")
+
+    _check(page, "run-1").check()
+    expect(_check(page, "run-2")).to_be_enabled()
+    _check(page, "run-2").check()
+    expect(_limit_notice(page)).to_be_visible()
+    expect(_limit_notice(page)).to_contain_text("The limit of 2 selected rows is reached")
+    expect(_check(page, "run-1")).to_be_enabled()
+
+    page.get_by_role("button", name="Next page").click()
+    expect(stems).to_have_text(["run-10"])
+    expect(_check(page, "run-10")).to_be_disabled()
+    expect(_limit_notice(page)).to_be_visible()
+
+    _search(page, "run-1")
+    expect(stems).to_have_text(["run-1", "run-10"])
+    expect(_check(page, "run-1")).to_be_checked()
+    expect(_check(page, "run-1")).to_be_enabled()
+    expect(_check(page, "run-10")).to_be_disabled()
+
+    _check(page, "run-1").uncheck()
+    expect(_limit_notice(page)).to_be_hidden()
+    expect(_check(page, "run-10")).to_be_enabled()
+    # run-2 stays selected outside the filter, so run-1 and run-10 do not fit.
+    expect(header).to_be_disabled()
+    _check(page, "run-10").check()
+    expect(_check(page, "run-1")).to_be_disabled()
+
+    open_column_menu(page.locator("#files"), "file").get_by_role("button", name="Desc").click()
+    expect(stems).to_have_text(["run-10", "run-1"])
+    expect(_check(page, "run-1")).to_be_disabled()
+    expect(_check(page, "run-10")).to_be_checked()
+    assert sorted(page.evaluate("JSON.parse(document.getElementById('files-selection').value)")) == [
+        "run-10",
+        "run-2",
+    ]
+
+
+def test_header_checkbox_selects_matching_rows_within_the_limit(
+    page: Page, server_url: str
+) -> None:
+    """The header selects every matching row when they fit and clears them; events carry the limit."""
+    page.goto(server_url)
+    expect(_file_stems(page)).to_have_text(["run-1", "run-2"])
+    page.evaluate(
+        "window.dtDetails = [];"
+        " document.addEventListener('datatable:selection-change',"
+        " (event) => window.dtDetails.push(event.detail));"
+    )
+    header = page.get_by_label("Select all filtered files")
+
+    _search(page, "run-1")
+    expect(_file_stems(page)).to_have_text(["run-1", "run-10"])
+    expect(header).to_be_enabled()
+
+    header.check()
+    expect(_check(page, "run-1")).to_be_checked()
+    expect(_check(page, "run-10")).to_be_checked()
+    expect(_limit_notice(page)).to_be_visible()
+    assert page.evaluate("window.dtDetails.at(-1)") == {
+        "keys": ["run-1", "run-10"],
+        "max": MAX_SELECTED,
+    }
+
+    _search(page, "run-2")
+    expect(_file_stems(page)).to_have_text(["run-2"])
+    expect(header).to_be_disabled()
+    expect(_check(page, "run-2")).to_be_disabled()
+
+    _search(page, "run-1")
+    expect(_file_stems(page)).to_have_text(["run-1", "run-10"])
+    expect(header).to_be_checked()
+    expect(header).to_be_enabled()
+    header.uncheck()
+    expect(_check(page, "run-1")).not_to_be_checked()
+    expect(_check(page, "run-10")).not_to_be_checked()
+    expect(_limit_notice(page)).to_be_hidden()
+    assert page.evaluate("window.dtDetails.at(-1)") == {"keys": [], "max": MAX_SELECTED}
+
+
+@pytest.mark.table_config(page_size=3, max_selected=MAX_SELECTED)
+def test_row_clicks_and_ranges_keep_within_the_limit(page: Page, server_url: str) -> None:
+    """A range passing the limit selects nothing; a row disabled at the limit ignores clicks."""
+    page.goto(server_url)
+    expect(_file_stems(page)).to_have_text(["run-1", "run-2", "run-10"])
+    count = page.locator("[data-dt-selected-count]")
+    expect(count).to_have_text("0 / 2 selected")
+
+    page.locator('#files tr[data-dt-key="run-1"] td').nth(1).click()
+    expect(count).to_have_text("1 / 2 selected")
+    page.locator('#files tr[data-dt-key="run-10"] td').nth(1).click(modifiers=["Shift"])
+    expect(_check(page, "run-2")).not_to_be_checked()
+    expect(_check(page, "run-10")).not_to_be_checked()
+    expect(count).to_have_text("1 / 2 selected")
+
+    page.locator('#files tr[data-dt-key="run-2"] td').nth(1).click()
+    expect(count).to_have_text("2 / 2 selected")
+    expect(_limit_notice(page)).to_be_visible()
+    unselected = page.locator('#files tr[data-dt-key="run-10"]')
+    expect(unselected).not_to_have_css("cursor", "pointer")
+    unselected.locator("td").nth(1).click()
+    unselected.locator("td").nth(1).click(modifiers=["Shift"])
+    expect(_check(page, "run-10")).not_to_be_checked()
+    expect(count).to_have_text("2 / 2 selected")
+
+    page.get_by_role("button", name="Clear").click()
+    expect(count).to_have_text("0 / 2 selected")
+    expect(_limit_notice(page)).to_be_hidden()
+    expect(_check(page, "run-10")).to_be_enabled()

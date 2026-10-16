@@ -15,8 +15,13 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "playwright==1.63.0",
     "pytest==9.1.1",
+    "pytest-playwright==0.9.0",
+    "pytest-xdist==3.8.0",
     "ruff==0.16.7",
+    "starlette==1.7.0",
+    "uvicorn==0.54.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -24,3 +29,10 @@ packages = ["src/awesome_datatable"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+norecursedirs = [".*", "tmp"]
+# E2E tests drive the installed Chrome; select them with `-m e2e`.
+addopts = ["-m", "not e2e", "--browser-channel", "chrome"]
+markers = [
+    "e2e: browser tests of the data table in the demo app (run with `-m e2e`)",
+    "table_config(**changes): TableConfig fields that the demo app's table of an E2E test replaces",
+]

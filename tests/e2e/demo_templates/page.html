@@ -1,0 +1,17 @@
+{% from "datatable/macros.html" import assets, container, fragment %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>awesome-datatable demo</title>
+  <link rel="icon" href="data:,">
+  <script src="/static/htmx.min.js"></script>
+  {{ assets() }}
+</head>
+<body>
+  <main>
+    {#- The first fragment comes with the page, so the table needs no request of its own to show. -#}
+    {% call container(table) %}{{ fragment(table, view) }}{% endcall %}
+  </main>
+</body>
+</html>

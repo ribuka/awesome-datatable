@@ -32,9 +32,23 @@ uv add "awesome-datatable @ git+https://github.com/ribuka/awesome-datatable.git"
 uv sync
 uv run -m ruff check .
 uv run -m pytest
+uv run -m pytest -m e2e -n logical   # browser tests (needs Chrome)
 ```
 
-CI runs both on every pull request to `main`.
+CI runs all three on every pull request to `main`; the browser tests run in
+a job of their own (`e2e`).
+
+The browser tests (`tests/e2e/`, marked `e2e`, left out of a plain
+`uv run -m pytest`) drive the installed Chrome with Playwright through
+`datatable.js` and `datatable.css`. They use a demo app only for the tests
+(`tests/e2e/demo_app.py`, Starlette): one page with a table of three files
+and seven columns, its fragment and export routes, and htmx bundled in
+`tests/e2e/demo_static/`. A test changes fields of the table's settings with
+the `table_config` marker, such as
+`@pytest.mark.table_config(page_size=2, max_selected=2)`. The development
+dependencies (Starlette, uvicorn, Playwright, pytest-playwright,
+pytest-xdist) are not dependencies of the package. Without Chrome installed,
+run `uv run -m playwright install chrome` first.
 
 ## Layout
 
