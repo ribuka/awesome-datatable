@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Literal
 
@@ -252,3 +253,20 @@ class TableConfig:
             Columns whose ``filter`` is not ``None``.
         """
         return {column.name: column for column in self.columns if column.filter is not None}
+
+    @property
+    def query_columns(self) -> str:
+        """Return the columns that the table's query can name, as JSON.
+
+        The kept query of a table (datatable.js) holds its sort and filters
+        only while this text is the same, so that a table whose columns
+        changed is not asked for a column or a filter it no longer has.
+
+        Returns
+        -------
+        str
+            JSON array of ``[name, filter, sortable]`` per column, in order.
+        """
+        return json.dumps(
+            [[column.name, column.filter, column.sortable] for column in self.columns]
+        )

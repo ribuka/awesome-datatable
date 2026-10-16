@@ -275,6 +275,72 @@
     return fields;
   }
 
+  // The applied query of each table is kept in sessionStorage, per screen
+  // (the page's path) and table id, after each of its requests succeeds, so
+  // the table shows it again after a switch to another screen and back or a
+  // reload, in this tab: a table that loads its first fragment (`load`,
+  // `intersect once`) asks for the kept query at once, and a table drawn
+  // with the page reloads with it (initTable). The sort and the filters name
+  // columns, so they are kept only while the table has the same columns
+  // (`data-dt-query-columns`); the rows per page and the search box always.
+  const KEPT_QUERY_KEY = "datatable:query";
+  const COLUMN_FREE_PARAMETERS = ["page_size", "search"];
+
+  function keptQueryKey(root) {
+    return `${KEPT_QUERY_KEY}:${window.location.pathname}#${root.id}`;
+  }
+
+  // Returns the kept query of a table (URLSearchParams), or null without one.
+  function keptQuery(root) {
+    let kept;
+    try {
+      kept = JSON.parse(sessionStorage.getItem(keptQueryKey(root)) ?? "null");
+    } catch {
+      return null;
+    }
+    if (typeof kept?.query !== "string") {
+      return null;
+    }
+    const fields = new URLSearchParams(kept.query);
+    if (kept.columns === root.dataset.dtQueryColumns) {
+      return fields;
+    }
+    const names = COLUMN_FREE_PARAMETERS.map((name) => `${root.id}.${name}`);
+    const free = new URLSearchParams([...fields].filter(([name]) => names.includes(name)));
+    return [...free].length > 0 ? free : null;
+  }
+
+  function keepQuery(root, fields) {
+    try {
+      sessionStorage.setItem(
+        keptQueryKey(root),
+        JSON.stringify({ columns: root.dataset.dtQueryColumns, query: fields.toString() }),
+      );
+    } catch {
+      // Without storage the query lasts only for this page.
+    }
+  }
+
+  function forgetQuery(root) {
+    try {
+      sessionStorage.removeItem(keptQueryKey(root));
+    } catch {
+      // Nothing was kept.
+    }
+  }
+
+  // Whether two queries hold the same parameters, in any order.
+  function sameQuery(first, second) {
+    const sorted = (fields) => JSON.stringify([...fields].sort());
+    return sorted(first) === sorted(second);
+  }
+
+  // The kept query a table is to ask for with its next whole load (set by
+  // initTable), and the kept query of its request in flight (until its
+  // response is swapped in or fails).
+  const pendingQueries = new WeakMap();
+  const restoringQueries = new WeakMap();
+
   // Returns the file name of a download from its Content-Disposition
   // header: `filename*` (percent-encoded UTF-8) or else `filename`.
   function downloadName(disposition, fallback) {
@@ -1225,10 +1291,21 @@
     if (!root?.matches?.("[data-datatable]")) {
       return;
     }
-    for (const [name, value] of withExtraInputs(root, appliedQueryFields(root))) {
+    // A whole load asks for the kept query instead of the applied one: the
+    // one initTable set, or, for a first fragment, the kept one.
+    const reloaded = event.detail.triggeringEvent?.type === RELOAD_EVENT;
+    const kept = reloaded ? null : pendingQueries.get(root) ?? (root.querySelector(".dt-table") ? null : keptQuery(root));
+    pendingQueries.delete(root);
+    if (kept) {
+      restoringQueries.set(root, kept);
+    } else {
+      restoringQueries.delete(root);
+    }
+    const fields = new URLSearchParams(kept ?? appliedQueryFields(root));
+    for (const [name, value] of withExtraInputs(root, fields)) {
       event.detail.formData.append(name, value);
     }
-    if (event.detail.triggeringEvent?.type === RELOAD_EVENT) {
+    if (reloaded) {
       event.detail.formData.append(`${root.id}.parts`, "1");
     }
   });
@@ -1242,9 +1319,27 @@
     }
   });
 
+  // A request that succeeds keeps the query its response applied, which htmx
+  // has swapped in by now. A kept query that fails (its response is not
+  // swapped in) is forgotten, and the table loads again with its applied
+  // query.
   document.addEventListener("htmx:afterRequest", (event) => {
-    if (event.detail.elt.matches?.("[data-datatable]")) {
-      event.detail.elt.removeAttribute("aria-busy");
+    const root = event.detail.elt;
+    if (!root.matches?.("[data-datatable]")) {
+      return;
+    }
+    root.removeAttribute("aria-busy");
+    if (event.detail.successful) {
+      if (root.querySelector(".dt-table")) {
+        keepQuery(root, appliedQueryFields(root));
+      }
+      return;
+    }
+    if (restoringQueries.has(root)) {
+      restoringQueries.delete(root);
+      forgetQuery(root);
+      // After this request ends, so that hx-sync does not drop the new one.
+      setTimeout(() => htmx.trigger(root, "dt-refresh"));
     }
   });
 
@@ -1418,6 +1513,14 @@
   document.addEventListener("htmx:afterSwap", (event) => {
     const root = event.detail.target ?? event.target;
     if (root?.matches?.("[data-datatable]")) {
+      // The typed filters and the search box are kept from the table before
+      // the swap (hx-preserve), and the response gives the typed bounds no
+      // value: after a kept query they show it.
+      const kept = restoringQueries.get(root);
+      restoringQueries.delete(root);
+      if (kept) {
+        setControls(root.querySelectorAll("[data-dt-query][hx-preserve]"), kept);
+      }
       syncColumns(root, true);
       syncPinned(root);
       syncWidths(root);
@@ -1445,6 +1548,29 @@
     if (root.dataset.dtSelection) {
       syncChecks(root);
     }
+    restoreQuery(root);
+  }
+
+  // A table drawn with another query than the kept one loads it, at once
+  // or, while hidden (a point table without points), with its first load.
+  // Once per table: on DOMContentLoaded for a table drawn with the page,
+  // before the page's own scripts load it on `pageshow` (htmx sends
+  // `htmx:load` for the page only after a timeout), and from initTable for a
+  // table put in the page later.
+  const restored = new WeakSet();
+
+  function restoreQuery(root) {
+    if (restored.has(root) || !root.querySelector(".dt-table")) {
+      return;
+    }
+    restored.add(root);
+    const kept = keptQuery(root);
+    if (kept && !sameQuery(kept, appliedQueryFields(root))) {
+      pendingQueries.set(root, kept);
+      if (!root.closest("[hidden]")) {
+        htmx.trigger(root, "dt-refresh");
+      }
+    }
   }
 
   function initTables(element) {
@@ -1455,6 +1581,9 @@
   }
 
   document.addEventListener("htmx:load", (event) => initTables(event.target));
+  // htmx processes the page on DOMContentLoaded too, from a listener added
+  // before this one, so the tables answer their triggers by now.
+  document.addEventListener("DOMContentLoaded", () => document.querySelectorAll("[data-datatable]").forEach(restoreQuery));
 
   // Settling resets the attributes of elements kept by id to those of the
   // response, which drops the placement of a reopened menu; place it again

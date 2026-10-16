@@ -6,6 +6,7 @@ import json
 import re
 from dataclasses import replace
 from datetime import datetime
+from html import unescape
 
 import polars as pl
 import pytest
@@ -69,6 +70,22 @@ def test_container_posts_with_the_extra_inputs(environment: Environment) -> None
     assert 'hx-post="/p"' in html
     assert "hx-get" not in html
     assert 'data-dt-extra-inputs="a b"' in html
+
+
+def test_container_names_the_columns_its_query_can_name(environment: Environment) -> None:
+    """The container carries each column's name, filter, and sortability, for its kept query."""
+    config = TableConfig(
+        table_id="p",
+        key="k",
+        columns=(ColumnConfig("k", filter="text"), ColumnConfig("n", sortable=False)),
+        url="/p",
+    )
+
+    html = _render(environment, "{{ container(config) }}", config=config)
+
+    match = re.search(r'data-dt-query-columns="([^"]*)"', html)
+    assert match is not None
+    assert json.loads(unescape(match[1])) == [["k", "text", True], ["n", None, False]]
 
 
 def test_container_of_a_plain_table_has_no_selection(environment: Environment) -> None:
