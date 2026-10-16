@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import KW_ONLY, dataclass
 from typing import Literal
 
 FilterKind = Literal["text", "choice", "number", "datetime"]
@@ -13,6 +13,9 @@ RequestMethod = Literal["get", "post"]
 @dataclass(frozen=True)
 class ColumnConfig:
     """One shown column of a data table.
+
+    Only ``name`` may be passed by position; the other fields are
+    keyword-only, so that a field added later cannot shift them.
 
     Attributes
     ----------
@@ -42,6 +45,7 @@ class ColumnConfig:
     """
 
     name: str
+    _: KW_ONLY
     label: str | None = None
     filter: FilterKind | None = None
     filter_label: str | None = None
@@ -72,9 +76,12 @@ class ColumnConfig:
         return f"Filter by {self.header}" if self.filter_label is None else self.filter_label
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TableConfig:
     """Settings of one data table.
+
+    Every field is keyword-only, so that a field added later, even a
+    required one, cannot shift the others.
 
     Attributes
     ----------

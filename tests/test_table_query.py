@@ -13,17 +13,19 @@ from flat_pca.webui.datatable import (
     ColumnCounts,
     TableConfig,
     TableState,
-    absolute_sortable,
     apply_state,
-    choice_options,
-    count_values,
-    filter_expression,
     parse_state,
+    summarize_table,
+)
+from flat_pca.webui.datatable.counts import count_values
+from flat_pca.webui.datatable.query import (
+    absolute_sortable,
+    filter_expression,
     search_columns,
     search_terms,
     sort_frame,
-    summarize_table,
 )
+from flat_pca.webui.datatable.summary import choice_options
 
 
 def _keys(frame: pl.DataFrame, state: TableState, config: TableConfig) -> list[str]:

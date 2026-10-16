@@ -7,7 +7,8 @@ from datetime import datetime
 import polars as pl
 import pytest
 
-from flat_pca.webui.datatable import dtype_label, format_value
+from flat_pca.webui.datatable import format_value
+from flat_pca.webui.datatable.formatting import dtype_label
 
 
 @pytest.mark.parametrize(

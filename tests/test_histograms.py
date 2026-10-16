@@ -18,10 +18,12 @@ from flat_pca.webui.datatable import (
     TopValue,
     TopValues,
     apply_state,
+    parse_state,
+)
+from flat_pca.webui.datatable.histograms import (
     column_histograms,
     float_bins,
     integer_bins,
-    parse_state,
 )
 
 

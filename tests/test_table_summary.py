@@ -10,11 +10,13 @@ from flat_pca.webui.datatable import (
     TableConfig,
     TableState,
     apply_state,
+    parse_state,
+    summarize_table,
+)
+from flat_pca.webui.datatable.histograms import (
     column_histograms,
     count_histograms,
     mark_histograms,
-    parse_state,
-    summarize_table,
 )
 
 

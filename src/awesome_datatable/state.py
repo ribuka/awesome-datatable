@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Literal, NamedTuple, get_args
 
 from .config import ColumnConfig, TableConfig
+from .parameters import Parameters, parameter_lists
 
 SORT_PARAMETER = "sort"
 ORDER_PARAMETER = "order"
@@ -291,7 +292,7 @@ def _parse_filters(
     return _Filters(text=text, equals=equals, lower=lower, upper=upper, nulls=nulls)
 
 
-def parse_state(parameters: Mapping[str, Sequence[str]], config: TableConfig) -> TableState:
+def parse_state(parameters: Parameters, config: TableConfig) -> TableState:
     """Build a ``TableState`` from query parameters.
 
     Only parameters named ``<table_id>.<name>`` belong to the table; others
@@ -309,8 +310,10 @@ def parse_state(parameters: Mapping[str, Sequence[str]], config: TableConfig) ->
 
     Parameters
     ----------
-    parameters : Mapping[str, Sequence[str]]
-        Query parameters with every value of each name.
+    parameters : Parameters
+        Query parameters with every value of each name: an object with
+        ``getlist`` (such as Starlette's ``QueryParams`` or ``FormData``) or
+        a mapping from each name to its values. Values are read as ``str``.
     config : TableConfig
         Table settings.
 
@@ -327,7 +330,7 @@ def parse_state(parameters: Mapping[str, Sequence[str]], config: TableConfig) ->
     """
     every = {
         key.removeprefix(config.prefix): raw
-        for key, raw in parameters.items()
+        for key, raw in parameter_lists(parameters).items()
         if key.startswith(config.prefix)
     }
     values = {key: _last(raw) for key, raw in every.items()}

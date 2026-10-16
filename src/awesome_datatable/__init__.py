@@ -1,56 +1,36 @@
 """A polars table filtered, sorted, and paged on the server and shown with htmx.
 
 The package depends only on polars and Jinja2 (and htmx in the browser), so
-it can be reused outside flat-pca; see ``README.md`` for its use.
+it can be reused outside flat-pca; see ``README.md`` for its use. Its public
+API is what this module exports; the submodules are internal.
 """
 
-from .chips import FilterChip, filter_chips
+from .chips import FilterChip
 from .config import ColumnConfig, FilterKind, RequestMethod, TableConfig
-from .counts import ColumnCounts, count_values
-from .environment import STATIC_DIR, TEMPLATES_DIR, configure_environment
+from .counts import ColumnCounts
+from .environment import STATIC_DIR, configure_environment
 from .export import (
+    MEDIA_TYPES,
     ExportFile,
     ExportFormat,
     ExportRequest,
     ExportRows,
     export_file,
     export_filename,
-    export_rows,
     file_content,
     parse_export,
     parse_selection,
 )
-from .formatting import dtype_label, format_value
-from .histograms import (
-    ColumnHistogram,
-    Histogram,
-    HistogramBin,
-    TopValue,
-    TopValues,
-    column_histograms,
-    count_histograms,
-    float_bins,
-    integer_bins,
-    mark_histograms,
-)
-from .pagination import Page, paginate
-from .query import (
-    TableView,
-    absolute_sortable,
-    apply_state,
-    filter_expression,
-    key_text,
-    matching_rows,
-    search_columns,
-    search_terms,
-    sort_frame,
-)
-from .state import NullFilter, TableState, parameter_name, parse_state
-from .summary import TableSummary, choice_options, summarize_table
+from .formatting import format_value
+from .histograms import ColumnHistogram, Histogram, HistogramBin, TopValue, TopValues
+from .pagination import Page
+from .query import TableView, apply_state
+from .state import NullFilter, TableState, parse_state
+from .summary import TableSummary, summarize_table
 
 __all__ = [
+    "MEDIA_TYPES",
     "STATIC_DIR",
-    "TEMPLATES_DIR",
     "ColumnConfig",
     "ColumnCounts",
     "ColumnHistogram",
@@ -71,33 +51,14 @@ __all__ = [
     "TableView",
     "TopValue",
     "TopValues",
-    "absolute_sortable",
     "apply_state",
-    "choice_options",
-    "column_histograms",
     "configure_environment",
-    "count_histograms",
-    "count_values",
-    "dtype_label",
     "export_file",
     "export_filename",
-    "export_rows",
     "file_content",
-    "filter_chips",
-    "filter_expression",
-    "float_bins",
     "format_value",
-    "integer_bins",
-    "key_text",
-    "mark_histograms",
-    "matching_rows",
-    "paginate",
-    "parameter_name",
     "parse_export",
     "parse_selection",
     "parse_state",
-    "search_columns",
-    "search_terms",
-    "sort_frame",
     "summarize_table",
 ]
