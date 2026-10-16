@@ -27,14 +27,14 @@ from flat_pca.webui.datatable import (
 def environment() -> Environment:
     """Return a bare Jinja2 environment with the data table templates."""
     environment = Environment(autoescape=select_autoescape(["html"]))
-    configure_environment(environment)
+    configure_environment(environment, static_url="/datatable")
     return environment
 
 
 def _render(environment: Environment, call: str, **context: object) -> str:
     """Render one macro call of ``datatable/macros.html``."""
     template = environment.from_string(
-        '{% from "datatable/macros.html" import container, fragment %}' + call
+        '{% from "datatable/macros.html" import container, export_button, fragment %}' + call
     )
     return template.render(**context)
 
@@ -829,22 +829,31 @@ def test_fragment_has_an_export_menu_of_the_filtered_and_selected_rows(
     assert " disabled" not in menu
 
 
-def test_export_button_starts_with_the_configured_icon(
-    config: TableConfig, frame: pl.DataFrame
+def test_export_button_starts_with_the_download_icon(
+    environment: Environment, config: TableConfig, frame: pl.DataFrame
 ) -> None:
-    """The "Export" button starts with the application's icon markup, or has text alone."""
+    """A table's "Export" button is ``export_button``: the package's SVG icon and the text."""
     exporting = replace(config, export_url="/table/export")
     view = apply_state(frame, TableState(), exporting)
-    plain = Environment(autoescape=select_autoescape(["html"]))
-    configure_environment(plain)
-    iconed = Environment(autoescape=select_autoescape(["html"]))
-    configure_environment(iconed, export_icon='<span class="icon" aria-hidden="true">download</span>')
 
-    button = 'popovertarget="t-export-menu" aria-haspopup="dialog">{}Export</button>'
-    call = "{{ fragment(config, view) }}"
-    assert button.format("") in _render(plain, call, config=exporting, view=view)
-    assert button.format('<span class="icon" aria-hidden="true">download</span>') in _render(
-        iconed, call, config=exporting, view=view
+    html = _render(environment, "{{ fragment(config, view) }}", config=exporting, view=view)
+
+    button = re.search(r'<button type="button" class="dt-export-button"[^>]*>.*?</button>', html, re.DOTALL)
+    assert button is not None
+    assert button[0] == _render(environment, '{{ export_button("t-export-menu") }}')
+    assert 'popovertarget="t-export-menu" aria-haspopup="dialog"><svg ' in button[0]
+    assert '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">' in button[0]
+    assert 'stroke="currentColor"' in button[0]
+    assert button[0].endswith("</svg>Export</button>")
+
+
+def test_export_button_opens_the_given_menu(environment: Environment) -> None:
+    """``export_button`` opens the menu it names, also one outside a table."""
+    html = _render(environment, '{{ export_button("run-export-menu") }}')
+
+    assert html.startswith(
+        '<button type="button" class="dt-export-button" popovertarget="run-export-menu" '
+        'aria-haspopup="dialog">'
     )
 
 

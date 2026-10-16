@@ -137,8 +137,7 @@
   padding: 0.2rem 0.6rem;
 }
 
-/* The application's icon (`export_icon` of configure_environment), if any,
-   sits before the text. */
+/* The download icon sits before the text. */
 .dt-export-button {
   display: inline-flex;
   align-items: center;

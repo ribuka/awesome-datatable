@@ -7,7 +7,15 @@ paged on the server and shown with htmx.
   (`tests/webui/datatable/test_table_imports.py` checks this). It does not
   depend on a web framework or on the rest of flat-pca, so it can be copied to
   another project.
-- In the browser it needs htmx (any 2.x) and `datatable.js` / `datatable.css`.
+- In the browser it needs htmx (any 2.x) and `datatable.js` / `datatable.css`
+  (the `assets` macro loads them).
+- It loads no external resource: no script, stylesheet, font, icon, or image
+  from a CDN or any other URL, so the tables work without a network. Its
+  icons are inline SVG in the templates (drawn in `currentColor`); an icon or
+  file added later is inline SVG or a file shipped in `static/`
+  (`tests/webui/datatable/test_no_external_resources.py` checks the
+  `src` / `href` attributes, CSS `url(...)` and `@import`, and JS `import`
+  and `fetch`).
 - flat-pca's data selection and transform screens use it for the file table
   (`services/file_table.py`, `routes/catalog.py`), and the sidebar's
   shown-file dialog for the transform targets of the shown run
@@ -20,9 +28,10 @@ paged on the server and shown with htmx.
   `routes/insight.py`), and the score
   and T²/Q screens for the files of the points chosen in their figures
   (`services/point_table.py`, `routes/point_table.py`, `routes/scores.py`,
-  `routes/monitoring.py`; `extra_inputs` and `method="post"`). flat-pca gives
-  every "Export" button its Material Symbols `download` icon
-  (`templating.py`).
+  `routes/monitoring.py`; `extra_inputs` and `method="post"`). The transform
+  screen's run list has a menu of its own outside any table, opened by
+  `export_button` (`templates/partials/transform_runs.html`,
+  `static/js/run_export.js`).
 
 Update this document whenever the component gains a feature.
 
@@ -42,8 +51,8 @@ Update this document whenever the component gains a feature.
 | `pagination.py` | `Page` and `paginate`: the page among the rows. |
 | `formatting.py` | `format_value`: the cell text (`dt_cell` filter); `dtype_label`: the column type under each column name. |
 | `parameters.py` | `parameter_lists`: request parameters (an object with `getlist`, or a mapping from each name to its values) → every value of each name as text, for `parse_state` and `parse_export`. |
-| `environment.py` | `configure_environment`: registers the templates, the filter, and the "Export" button's icon (`dt_export_icon`) with a Jinja2 environment; `STATIC_DIR`. |
-| `templates/datatable/macros.html` | The `container` and `fragment` macros. |
+| `environment.py` | `configure_environment`: registers the templates, the filter, and the versioned URLs of the static files (`dt_static_file_url`, under `static_url`) with a Jinja2 environment; `STATIC_DIR`. |
+| `templates/datatable/macros.html` | The `assets`, `container`, `fragment`, and `export_button` macros. |
 | `static/datatable.js`, `static/datatable.css` | Browser behavior and look. |
 
 ## Use
@@ -57,26 +66,35 @@ package (`from flat_pca.webui.datatable import ...`); the submodules are
 internal and may change without notice, and only the package's own unit
 tests import them.
 
-1. Configure the Jinja2 environment once and serve `STATIC_DIR`:
+1. Serve `STATIC_DIR` (with the web framework's own means) and configure
+   the Jinja2 environment once with the URL it is served at, `static_url`
+   (keyword-only and required, with or without a trailing `/`; a positional
+   or missing one is a `TypeError`, so the URL never silently differs from
+   the mount):
 
    ```python
    from flat_pca.webui.datatable import STATIC_DIR, configure_environment
 
-   configure_environment(templates.env)  # adds datatable/*.html and dt_cell
    app.mount("/datatable", StaticFiles(directory=STATIC_DIR), name="datatable")
+   configure_environment(templates.env, static_url="/datatable")  # adds datatable/*.html and dt_cell
    ```
 
-   and load `datatable.css` and `datatable.js` (after htmx) on the page.
-   `export_icon` (HTML inserted as is, so trusted markup) puts an icon of the
-   application's own before the text of every "Export" button; the package
-   ships no icons:
+   Then load the stylesheet and the script in the page's `<head>` with the
+   `assets` macro, before the page's own stylesheets (which may then set the
+   `--dt-*` variables) and after htmx:
 
-   ```python
-   configure_environment(
-       templates.env,
-       export_icon='<span class="material-symbols-outlined" aria-hidden="true">download</span>',
-   )
+   ```jinja
+   {% from "datatable/macros.html" import assets %}
+   {{ assets() }}
    ```
+
+   It writes a `<link rel="stylesheet">` and a `<script defer>`, each URL
+   ending in `?v=` and the file's modification time, so a browser does not
+   keep an older copy once the package is updated (installing it again
+   changes the time). The application needs to know neither the names nor
+   the number of the files. Being deferred, the script runs after the
+   scripts in `<head>` that are not (htmx) and before deferred scripts and
+   modules after it.
 
 2. Describe the table. Every `TableConfig` argument and every
    `ColumnConfig` argument but `name` is keyword-only (a positional one is a
@@ -204,6 +222,44 @@ tests import them.
    `datatable:refresh` (bubbling) on the container: the whole fragment is
    loaded again from the first page with the applied query, so that the
    column menus show the values of the new rows.
+
+7. A menu also works outside a table, such as an "Export" menu of the
+   application's own. Put the button opening it and the menu in an element
+   of class `dt-root` without `data-datatable` (which gives them the
+   `--dt-*` variables and the look of the tables' buttons and menus), and
+   open it with the `export_button` macro, or with any button whose
+   `popovertarget` is the menu's `id`:
+
+   ```jinja
+   {% from "datatable/macros.html" import export_button %}
+   <div class="dt-root">
+     {{ export_button("run-export-menu") }}
+     <div popover id="run-export-menu" class="dt-menu" role="dialog" aria-label="Export" data-dt-menu>
+       <div class="dt-menu-section">...</div>
+     </div>
+   </div>
+   ```
+
+   - The menu is an element with `popover`, an `id`, and `data-dt-menu`
+     (empty), of class `dt-menu`; the button opening it has
+     `popovertarget` = that `id`. `export_button(menu_id)` draws the
+     `Export` button of the tables (`.dt-export-button`: the download icon
+     and `Export`, `aria-haspopup="dialog"`).
+   - `datatable.js` places it as a column menu: under the button opening it,
+     at its left edge, or above the button when there is no room below, and
+     always at least 8 px inside the window; it follows the button while the
+     page scrolls or the window resizes. It stays invisible until placed
+     (`data-dt-placed`).
+   - The browser closes it on a click outside it, and on Escape, after
+     which the focus returns to its button; opening another menu closes it.
+     The application closes it itself, when it is done, with
+     `hidePopover()`.
+   - Its contents are the application's: `.dt-menu-section` and the other
+     menu classes give them the tables' look, and the application's own
+     script handles its controls. Leave out the attributes that
+     `datatable.js` handles inside a table (`data-dt-query`,
+     `data-dt-export`, `data-dt-apply`, and the others of
+     [Elements and classes](#elements-and-classes)).
 
 ## Columns
 
@@ -558,9 +614,9 @@ container, so several tables can share a page.
 | `.dt-search` | Search box of the whole table (`id` `<table_id>-search`). |
 | `.dt-columns-button`, `.dt-menu[data-dt-columns-menu]`, `[data-dt-show-column]` | `Columns` button, its menu (`id` `<table_id>-columns-menu`, named `Columns`), and the checkbox of each column. |
 | `.dt-pin-button[data-dt-pin-toggle]`, `.dt-switch` | `Pin columns` toggle (`aria-pressed`) and its switch. |
-| `.dt-export-button`, `.dt-menu[data-dt-export-menu]`, `.dt-export-rows`, `.dt-export-label`, `[data-dt-export][data-dt-export-rows]`, `[data-dt-export-selected-count]`, `.dt-export-error[data-dt-export-error]` | `Export` button, its menu (`id` `<table_id>-export-menu`, named `Export`), a group of rows (named `Filtered rows` / `Selected rows`) with its label and count, a download button (`csv` or `parquet`, `filtered` or `selected`, named `Export <rows> as <format>`), the selected count, and the failure notice (`role="alert"`). |
+| `.dt-export-button`, `.dt-menu[data-dt-export-menu]`, `.dt-export-rows`, `.dt-export-label`, `[data-dt-export][data-dt-export-rows]`, `[data-dt-export-selected-count]`, `.dt-export-error[data-dt-export-error]` | `Export` button (`export_button`: the download icon and `Export`), its menu (`id` `<table_id>-export-menu`, named `Export`), a group of rows (named `Filtered rows` / `Selected rows`) with its label and count, a download button (`csv` or `parquet`, `filtered` or `selected`, named `Export <rows> as <format>`), the selected count, and the failure notice (`role="alert"`). |
 | `.dt-chips`, `.dt-chip`, `.dt-chip-label`, `[data-dt-remove-filter]` | List of the filters in use (named `Filters in use`), a chip, its text, and its × button (a JSON array of the parameter names it clears). |
-| `.dt-menu[popover][data-dt-menu]` | A menu: a column's (`id` `<table_id>-menu-<n>`, `role="dialog"`, named `<label> menu`, `data-dt-menu` = the column name) or the `Columns` or `Export` menu (empty `data-dt-menu`); `data-dt-placed` once placed. |
+| `.dt-menu[popover][data-dt-menu]` | A menu: a column's (`id` `<table_id>-menu-<n>`, `role="dialog"`, named `<label> menu`, `data-dt-menu` = the column name), the `Columns` or `Export` menu, or a menu outside a table (empty `data-dt-menu`; see [Use](#use) 7); `data-dt-placed` once placed. |
 | `.dt-menu-section`, `.dt-sorts`, `.dt-filter`, `.dt-choices`, `.dt-choice-list`, `.dt-choice`, `.dt-count` | Menu parts: sort buttons (`[data-dt-sort][data-dt-order]`, `aria-pressed`) and the `Abs` checkbox (`.dt-sort-absolute`, `[data-dt-sort-absolute]` = the column name), the filter, the value list (its fieldset and the `<div>` holding the values), a value, and counts. |
 | `.dt-nulls`, `.dt-nulls-label`, `[data-dt-null-value]`, `.dt-segmented`, `[data-dt-null]` | The null filter: its label with the null count, the hidden query input holding the choice, and the segmented control (`role="group"`) of its buttons (`aria-pressed`; `data-dt-null` is the value: empty, `is_null`, or `is_not_null`). |
 | `.dt-filter-actions`, `.dt-draft-status[data-dt-draft-status]`, `.dt-icon-button`, `.dt-apply[data-dt-apply]`, `.dt-cancel[data-dt-cancel]`, `.dt-clear-filter[data-dt-clear-filter]` | Under the filters of a column menu: the notice of unapplied changes and the `Apply filters`, `Cancel`, and `Clear the filters of this column` icon buttons. |
