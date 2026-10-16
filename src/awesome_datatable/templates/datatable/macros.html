@@ -1,6 +1,23 @@
-{#- Data table macros. `container` goes in the page; `fragment` is the body
-    that the table's URL returns and htmx swaps into the container.
-    datatable.js wires their controls; see README.md. -#}
+{#- Data table macros. `assets` goes in the page's <head>; `container` goes
+    in the page; `fragment` is the body that the table's URL returns and htmx
+    swaps into the container; `export_button` opens an "Export" menu, also
+    one outside a table. datatable.js wires their controls; see README.md. -#}
+
+{#- The stylesheet and the script of the tables, under the `static_url`
+    given to configure_environment, each with its version so that a browser
+    does not keep an older copy. Call it before the page's own stylesheets,
+    which may then override the `--dt-*` variables; the script is deferred,
+    so it runs after the scripts in <head> that are not. -#}
+{% macro assets() -%}
+<link rel="stylesheet" href="{{ dt_static_file_url('datatable.css') }}">
+<script src="{{ dt_static_file_url('datatable.js') }}" defer></script>
+{%- endmacro %}
+
+{#- The "Export" button: a download icon and "Export", opening the menu
+    whose id is `menu_id` (a popover with `data-dt-menu`; see README.md). -#}
+{% macro export_button(menu_id) -%}
+<button type="button" class="dt-export-button" popovertarget="{{ menu_id }}" aria-haspopup="dialog"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 2v8M4.5 6.5L8 10l3.5-3.5M2.5 13.5h11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Export</button>
+{%- endmacro %}
 
 {#- The table's container, which loads its fragment, and (for a selectable
     table) the hidden input holding the selection as a JSON array, kept
@@ -241,11 +258,10 @@
     filters (on all pages) and, in a selectable table, for the selected rows.
     datatable.js posts the table's query controls and the selection to
     `config.export_url` and saves the file; it keeps the selected count and
-    its buttons in step with the selection. The button starts with the
-    application's icon (`dt_export_icon`, see configure_environment). -#}
+    its buttons in step with the selection. -#}
 {% macro _export_menu(config, view, selected_count) -%}
 {% set menu_id = config.table_id ~ "-export-menu" %}
-<button type="button" class="dt-export-button" popovertarget="{{ menu_id }}" aria-haspopup="dialog">{{ dt_export_icon|safe }}Export</button>
+{{ export_button(menu_id) }}
 <div popover id="{{ menu_id }}" class="dt-menu" role="dialog" aria-label="Export" data-dt-menu data-dt-export-menu>
   {{ _export_rows("filtered", "Filtered rows", view.page.total) }}
   {% if config.selectable %}{{ _export_rows("selected", "Selected rows", selected_count) }}{% endif %}
