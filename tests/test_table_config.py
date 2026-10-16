@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from flat_pca.webui.datatable import ColumnConfig, TableConfig
+from awesome_datatable import ColumnConfig, TableConfig
 
 
 def test_column_config_takes_only_the_name_by_position() -> None:

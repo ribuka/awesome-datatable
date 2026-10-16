@@ -9,7 +9,7 @@ from itertools import pairwise
 import polars as pl
 import pytest
 
-from flat_pca.webui.datatable import (
+from awesome_datatable import (
     ColumnConfig,
     Histogram,
     HistogramBin,
@@ -20,7 +20,7 @@ from flat_pca.webui.datatable import (
     apply_state,
     parse_state,
 )
-from flat_pca.webui.datatable.histograms import (
+from awesome_datatable.histograms import (
     column_histograms,
     float_bins,
     integer_bins,

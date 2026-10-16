@@ -1,41 +1,44 @@
-# datatable
+# awesome-datatable
 
 A table of a polars `DataFrame` / `LazyFrame` that is filtered, sorted, and
 paged on the server and shown with htmx.
 
-- The package imports only the standard library, polars, and Jinja2
-  (`tests/webui/datatable/test_table_imports.py` checks this). It does not
-  depend on a web framework or on the rest of flat-pca, so it can be copied to
-  another project.
+- The package (`awesome_datatable`) imports only the standard library,
+  polars, and Jinja2 (`tests/test_table_imports.py` checks this). It does not
+  depend on a web framework, so any application that renders Jinja2
+  templates can use it.
 - In the browser it needs htmx (any 2.x) and `datatable.js` / `datatable.css`
   (the `assets` macro loads them).
 - It loads no external resource: no script, stylesheet, font, icon, or image
   from a CDN or any other URL, so the tables work without a network. Its
   icons are inline SVG in the templates (drawn in `currentColor`); an icon or
   file added later is inline SVG or a file shipped in `static/`
-  (`tests/webui/datatable/test_no_external_resources.py` checks the
-  `src` / `href` attributes, CSS `url(...)` and `@import`, and JS `import`
-  and `fetch`).
-- flat-pca's data selection and transform screens use it for the file table
-  (`services/file_table.py`, `routes/catalog.py`), and the sidebar's
-  shown-file dialog for the transform targets of the shown run
-  (`services/view_file_table.py`, `routes/view_selection.py`), and the model
-  screen for the explained variance table of the chosen fit run
-  (`services/explained_variance_table.py`, `routes/model.py`) and the
-  coefficient table of component k (`services/coefficient_table.py`,
-  `routes/model.py`), the insight screen for the ranking of the PCs by
-  their correlation with a target (`services/insight_ranking_table.py`,
-  `routes/insight.py`), and the score
-  and T²/Q screens for the files of the points chosen in their figures
-  (`services/point_table.py`, `routes/point_table.py`, `routes/scores.py`,
-  `routes/monitoring.py`; `extra_inputs` and `method="post"`). The transform
-  screen's run list has a menu of its own outside any table, opened by
-  `export_button` (`templates/partials/transform_runs.html`,
-  `static/js/run_export.js`).
+  (`tests/test_no_external_resources.py` checks the `src` / `href`
+  attributes, CSS `url(...)` and `@import`, and JS `import` and `fetch`).
+- The examples below use FastAPI; any framework that serves static files
+  and renders Jinja2 templates works the same way.
 
 Update this document whenever the component gains a feature.
 
+## Install
+
+```sh
+uv add "awesome-datatable @ git+https://github.com/ribuka/awesome-datatable.git"
+```
+
+## Development
+
+```sh
+uv sync
+uv run -m ruff check .
+uv run -m pytest
+```
+
+CI runs both on every pull request to `main`.
+
 ## Layout
+
+The paths are under `src/awesome_datatable/`.
 
 | Path | Contents |
 | --- | --- |
@@ -62,7 +65,7 @@ The public API is what the package itself exports (`__all__` of
 `summarize_table`, the export functions, `configure_environment`,
 `STATIC_DIR`, `MEDIA_TYPES`, `format_value`, and the types of their
 arguments, results, and of the fields of `TableView`. Import them from the
-package (`from flat_pca.webui.datatable import ...`); the submodules are
+package (`from awesome_datatable import ...`); the submodules are
 internal and may change without notice, and only the package's own unit
 tests import them.
 
@@ -73,7 +76,7 @@ tests import them.
    the mount):
 
    ```python
-   from flat_pca.webui.datatable import STATIC_DIR, configure_environment
+   from awesome_datatable import STATIC_DIR, configure_environment
 
    app.mount("/datatable", StaticFiles(directory=STATIC_DIR), name="datatable")
    configure_environment(templates.env, static_url="/datatable")  # adds datatable/*.html and dt_cell
@@ -188,10 +191,9 @@ tests import them.
    histograms, always over every row of the frame (not only the filtered
    ones); a given choice missing from the frame counts 0. None of it depends
    on the state, so keep the summary while the frame does not change, and
-   only filtering, sorting, and paging run per request (flat-pca keeps the
-   file table's frame and summary until the catalog changes:
-   `services/file_table_cache.py`). Without `summary`, `apply_state` makes
-   it from the frame.
+   only filtering, sorting, and paging run per request (for example, keep a
+   frame and its summary in a cache until the data behind it changes).
+   Without `summary`, `apply_state` makes it from the frame.
 
 5. With `export_url`, answer the export (a form POST) with another thin route:
 
@@ -418,8 +420,7 @@ header checkbox's matching keys, the export, and anything else built on
   row of the frame (`column_histograms`), counted on the server and drawn
   without a script, so its shape stays the same while the filters change
   and reads as a base. Turn it off when every row of the frame is not a
-  meaningful base (the shown-file dialog of flat-pca, whose rows are the
-  chosen files, has none).
+  meaningful base (a table of rows the user chose, for example).
   - Integer (up to 64 bits), float, date, and datetime columns: an inline
     SVG histogram with the smallest and largest value under it. Integers,
     dates, and datetimes are binned by their integer value (a datetime in its

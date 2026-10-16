@@ -7,7 +7,7 @@ from datetime import datetime
 import polars as pl
 import pytest
 
-from flat_pca.webui.datatable import ColumnConfig, TableConfig
+from awesome_datatable import ColumnConfig, TableConfig
 
 
 @pytest.fixture

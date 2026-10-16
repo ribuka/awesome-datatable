@@ -6,14 +6,14 @@ from dataclasses import replace
 
 import polars as pl
 
-from flat_pca.webui.datatable import (
+from awesome_datatable import (
     TableConfig,
     TableState,
     apply_state,
     parse_state,
     summarize_table,
 )
-from flat_pca.webui.datatable.histograms import (
+from awesome_datatable.histograms import (
     column_histograms,
     count_histograms,
     mark_histograms,

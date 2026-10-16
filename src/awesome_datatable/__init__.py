@@ -1,7 +1,7 @@
 """A polars table filtered, sorted, and paged on the server and shown with htmx.
 
 The package depends only on polars and Jinja2 (and htmx in the browser), so
-it can be reused outside flat-pca; see ``README.md`` for its use. Its public
+any web application can use it; see ``README.md`` for its use. Its public
 API is what this module exports; the submodules are internal.
 """
 

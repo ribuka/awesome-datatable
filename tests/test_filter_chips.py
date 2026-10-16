@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from flat_pca.webui.datatable import FilterChip, TableConfig, TableState, parse_state
-from flat_pca.webui.datatable.chips import filter_chips
+from awesome_datatable import FilterChip, TableConfig, TableState, parse_state
+from awesome_datatable.chips import filter_chips
 
 
 def test_filter_chips_list_every_filter_in_column_order(config: TableConfig) -> None:

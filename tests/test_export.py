@@ -11,7 +11,7 @@ from urllib.parse import unquote
 import polars as pl
 import pytest
 
-from flat_pca.webui.datatable import (
+from awesome_datatable import (
     ColumnConfig,
     ExportFile,
     ExportRequest,
@@ -26,7 +26,7 @@ from flat_pca.webui.datatable import (
     parse_selection,
     parse_state,
 )
-from flat_pca.webui.datatable.export import export_rows
+from awesome_datatable.export import export_rows
 
 MOMENT = datetime(2026, 10, 10, 9, 5, 7, tzinfo=UTC)
 

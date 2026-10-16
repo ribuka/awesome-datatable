@@ -6,9 +6,9 @@ import ast
 import sys
 from pathlib import Path
 
-from flat_pca.webui import datatable
+import awesome_datatable
 
-PACKAGE_DIR = Path(datatable.__file__).parent
+PACKAGE_DIR = Path(awesome_datatable.__file__).parent
 # Third-party packages the data table may import besides the standard library.
 ALLOWED_PACKAGES = {"polars", "jinja2"}
 
@@ -25,7 +25,7 @@ def _imported_modules(path: Path) -> list[tuple[str, int]]:
 
 
 def test_datatable_imports_only_the_standard_library_polars_and_jinja2() -> None:
-    """No module of the package imports flat_pca or another package."""
+    """No module of the package imports a package other than polars and jinja2."""
     files = sorted(PACKAGE_DIR.rglob("*.py"))
     assert files
 

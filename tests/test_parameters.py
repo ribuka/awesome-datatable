@@ -6,8 +6,8 @@ from collections.abc import Iterator, Mapping, Sequence
 
 import pytest
 
-from flat_pca.webui.datatable import TableConfig, parse_export, parse_state
-from flat_pca.webui.datatable.parameters import parameter_lists
+from awesome_datatable import TableConfig, parse_export, parse_state
+from awesome_datatable.parameters import parameter_lists
 
 QUERY = {
     "t.sort": ["score"],

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from flat_pca.webui.datatable.pagination import Page, paginate
+from awesome_datatable.pagination import Page, paginate
 
 
 def test_paginate_returns_the_requested_page() -> None:

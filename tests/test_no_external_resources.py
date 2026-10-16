@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from flat_pca.webui.datatable import STATIC_DIR
+from awesome_datatable import STATIC_DIR
 
 PACKAGE_DIR = STATIC_DIR.parent
 EXTERNAL = re.compile(r"\s*(?:https?:)?//", re.IGNORECASE)

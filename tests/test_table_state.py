@@ -7,7 +7,7 @@ from datetime import datetime
 
 import pytest
 
-from flat_pca.webui.datatable import ColumnConfig, TableConfig, TableState, parse_state
+from awesome_datatable import ColumnConfig, TableConfig, TableState, parse_state
 
 
 def test_parse_state_reads_filters_sort_and_page(config: TableConfig) -> None:

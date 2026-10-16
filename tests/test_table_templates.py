@@ -12,7 +12,7 @@ import polars as pl
 import pytest
 from jinja2 import Environment, select_autoescape
 
-from flat_pca.webui.datatable import (
+from awesome_datatable import (
     ColumnConfig,
     TableConfig,
     TableState,

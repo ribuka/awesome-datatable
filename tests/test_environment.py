@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from jinja2 import Environment, select_autoescape
 
-from flat_pca.webui.datatable import STATIC_DIR, configure_environment
-from flat_pca.webui.datatable import environment as environment_module
+from awesome_datatable import STATIC_DIR, configure_environment
+from awesome_datatable import environment as environment_module
 
 
 def _assets(static_url: str) -> str:
