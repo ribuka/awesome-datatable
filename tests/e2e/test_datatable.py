@@ -1,0 +1,1009 @@
+"""Browser tests of the data table's column menus, chips, pages, row selection, columns, and export."""
+
+from __future__ import annotations
+
+import io
+import re
+from urllib.parse import parse_qs, urlparse
+
+import polars as pl
+import pytest
+from datatable_menu import (
+    apply_button,
+    apply_column_menu,
+    cancel_button,
+    choose_null_filter,
+    clear_filter_button,
+    close_column_menu,
+    column_menu,
+    null_filter_button,
+    open_column_menu,
+)
+from playwright.sync_api import Locator, Page, Route, expect
+
+pytestmark = pytest.mark.e2e
+
+
+def _table(page: Page) -> Locator:
+    """Return the file table's container."""
+    return page.locator("#files")
+
+
+def _file_stems(page: Page) -> Locator:
+    """Return the file name cells of the file table, in display order.
+
+    Assert on all of them at once with ``to_have_text([...])``: it retries
+    until the whole list matches, so a table not yet swapped by htmx cannot
+    satisfy it the way a row count could.
+    """
+    return page.locator("#files tbody tr td:nth-child(2)")
+
+
+def test_column_menus_filter_file_list(page: Page, server_url: str) -> None:
+    """Value, bound, and null filters in the column menus and the search reload the file table."""
+    page.goto(server_url)
+    stems = _file_stems(page)
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+    filtered = table.locator("[data-dt-filtered]")
+    expect(filtered).to_have_count(0)
+
+    lot = open_column_menu(table, "lot")
+    lot.get_by_role("checkbox", name="B 1", exact=True).check()
+    lot.get_by_role("checkbox", name="A 1", exact=True).check()
+    apply_column_menu(lot)
+    expect(stems).to_have_text(["run-1", "run-2"])
+    expect(filtered).to_have_count(1)
+    # A value filter drops the null values, so "Is null" leaves no row.
+    lot = open_column_menu(table, "lot")
+    expect(lot.get_by_role("checkbox", name="B 1", exact=True)).to_be_checked()
+    choose_null_filter(lot, "Is null")
+    apply_column_menu(lot)
+    expect(stems).to_have_text([])
+    lot = open_column_menu(table, "lot")
+    lot.get_by_role("checkbox", name="A 1", exact=True).uncheck()
+    lot.get_by_role("checkbox", name="B 1", exact=True).uncheck()
+    apply_column_menu(lot)
+    expect(stems).to_have_text(["run-10"])
+    lot = open_column_menu(table, "lot")
+    expect(lot.locator(".dt-nulls-label")).to_have_text("Null values 1")
+    choose_null_filter(lot, "Any")
+    apply_column_menu(lot)
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    expect(filtered).to_have_count(0)
+
+    # Enter in a bound applies the draft.
+    yield_pct = open_column_menu(table, "yield_pct")
+    yield_pct.get_by_label("yield_pct lower").fill("90")
+    yield_pct.get_by_label("yield_pct lower").press("Enter")
+    expect(yield_pct).to_be_hidden()
+    expect(stems).to_have_text(["run-1"])
+    yield_pct = open_column_menu(table, "yield_pct")
+    expect(yield_pct.get_by_label("yield_pct lower")).to_have_value("90")
+    yield_pct.get_by_label("yield_pct lower").fill("")
+    choose_null_filter(yield_pct, "Is not null")
+    apply_column_menu(yield_pct)
+    expect(stems).to_have_text(["run-1", "run-2"])
+    expect(filtered).to_have_count(1)
+
+    # The search box above the table keeps the focus and the text across reloads.
+    search = table.get_by_role("searchbox", name="Search")
+    search.press_sequentially("1 RUN")
+    expect(stems).to_have_text(["run-1"])
+    expect(search).to_be_focused()
+    expect(search).to_have_value("1 RUN")
+    search.press("End")
+    search.press_sequentially("-")
+    expect(page.locator("[data-dt-page-range]")).to_have_text("1–1 of 1")
+    expect(search).to_have_value("1 RUN-")
+    expect(filtered).to_have_count(1)
+
+
+def test_file_column_menu_searches_the_file_names(page: Page, server_url: str) -> None:
+    """The file column's menu has a search and a null filter, without a list of values."""
+    page.goto(server_url)
+    stems = _file_stems(page)
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+
+    menu = open_column_menu(table, "file")
+    expect(menu.locator(".dt-choices")).to_have_count(0)
+    expect(null_filter_button(menu, "Any")).to_have_attribute("aria-pressed", "true")
+    menu.get_by_role("textbox", name="Filter by file").fill("1")
+    apply_column_menu(menu)
+    expect(stems).to_have_text(["run-1", "run-10"])
+    expect(table.locator(".dt-chip-label")).to_have_text(['file ~ "1"'])
+    expect(table.locator("[data-dt-filtered]")).to_have_count(1)
+
+    table.get_by_role("button", name='Remove filter file ~ "1"').click()
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+
+
+def test_header_checkbox_cell_toggles_on_a_click_anywhere(page: Page, server_url: str) -> None:
+    """A click in the header checkbox's cell, off the checkbox, toggles it once."""
+    page.goto(server_url)
+    expect(_file_stems(page)).to_have_text(["run-1", "run-2", "run-10"])
+    header = page.get_by_label("Select all filtered files")
+    cell = page.locator("#files thead th.dt-check")
+    rows = page.locator("#files tbody input[data-dt-row-check]")
+    expect(cell).to_have_css("cursor", "pointer")
+
+    cell.click(position={"x": 2, "y": 2})
+    expect(header).to_be_checked()
+    for index in range(3):
+        expect(rows.nth(index)).to_be_checked()
+    # A click on the checkbox itself toggles it once, not twice.
+    header.click()
+    expect(header).not_to_be_checked()
+    for index in range(3):
+        expect(rows.nth(index)).not_to_be_checked()
+    cell.click(position={"x": 2, "y": 2})
+    expect(header).to_be_checked()
+    cell.click(position={"x": 2, "y": 2})
+    expect(header).not_to_be_checked()
+
+
+@pytest.mark.parametrize("width", [1400, 900])
+def test_toolbar_puts_the_chips_on_top_and_the_buttons_at_the_right(
+    page: Page, server_url: str, width: int
+) -> None:
+    """The chips sit above the search box, which fills the width left of the right-aligned buttons."""
+    page.set_viewport_size({"width": width, "height": 900})
+    page.goto(server_url)
+    expect(_file_stems(page)).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+    lot = open_column_menu(table, "lot")
+    lot.get_by_role("checkbox", name="A 1", exact=True).check()
+    apply_column_menu(lot)
+    chips = table.locator(".dt-chips")
+    expect(chips).to_be_visible()
+
+    toolbar = table.locator(".dt-toolbar").bounding_box()
+    search = table.get_by_role("searchbox", name="Search").bounding_box()
+    columns = table.get_by_role("button", name="Columns", exact=True).bounding_box()
+    export = table.get_by_role("button", name="Export", exact=True).bounding_box()
+    chip_box = chips.bounding_box()
+    assert toolbar and search and columns and export and chip_box
+    assert chip_box["y"] + chip_box["height"] <= toolbar["y"]
+    assert abs(export["x"] + export["width"] - (toolbar["x"] + toolbar["width"])) <= 1
+    assert search["x"] == pytest.approx(toolbar["x"], abs=1)
+    assert columns["x"] - (search["x"] + search["width"]) <= 12
+
+
+def _count_table_loads(page: Page) -> list[str]:
+    """Return a list that collects the URL of every load of the file table from now on."""
+    loads: list[str] = []
+    page.on("request", lambda request: loads.append(request.url) if "/files?" in request.url else None)
+    return loads
+
+
+def test_column_menu_filters_wait_for_apply(page: Page, server_url: str) -> None:
+    """Checking values reloads nothing until Apply, which reloads the first page once and closes the menu."""
+    page.goto(server_url)
+    stems = _file_stems(page)
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+    loads = _count_table_loads(page)
+
+    lot = open_column_menu(table, "lot")
+    apply = apply_button(lot)
+    status = lot.get_by_role("status")
+    expect(apply).to_be_disabled()
+    expect(status).to_be_hidden()
+    expect(clear_filter_button(lot)).to_be_disabled()
+    lot.get_by_role("checkbox", name="A 1", exact=True).check()
+    lot.get_by_role("checkbox", name="B 1", exact=True).check()
+    choose_null_filter(lot, "Is not null")
+    expect(apply).to_be_enabled()
+    expect(status).to_have_text("Unapplied changes")
+    expect(lot).to_have_attribute("data-dt-dirty", "")
+    # Back to the applied filters, there is nothing to apply.
+    choose_null_filter(lot, "Any")
+    lot.get_by_role("checkbox", name="B 1", exact=True).uncheck()
+    lot.get_by_role("checkbox", name="A 1", exact=True).uncheck()
+    expect(apply).to_be_disabled()
+    expect(status).to_be_hidden()
+    lot.get_by_role("checkbox", name="A 1", exact=True).check()
+    lot.get_by_role("checkbox", name="B 1", exact=True).check()
+    page.wait_for_timeout(500)
+    assert loads == []
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+
+    apply_column_menu(lot)
+    expect(stems).to_have_text(["run-1", "run-2"])
+    page.wait_for_timeout(500)
+    assert len(loads) == 1
+    assert "files.eq__lot=A" in loads[0] and "files.eq__lot=B" in loads[0]
+    assert "files.page=1" in loads[0]
+
+    # Clear removes every filter of the column at once and reloads.
+    lot = open_column_menu(table, "lot")
+    expect(lot.get_by_role("status")).to_be_hidden()
+    clear_filter_button(lot).click()
+    expect(lot).to_be_hidden()
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    expect(table.locator("[data-dt-filtered]")).to_have_count(0)
+    expect(open_column_menu(table, "lot").get_by_role("checkbox", name="A 1", exact=True)).not_to_be_checked()
+
+
+def test_column_menu_draft_is_discarded_by_cancel_escape_and_a_click_outside(page: Page, server_url: str) -> None:
+    """Cancel, Escape, and a click outside drop the draft; the menu reopens with the applied filters."""
+    page.goto(server_url)
+    stems = _file_stems(page)
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+    lot = open_column_menu(table, "lot")
+    lot.get_by_role("checkbox", name="B 1", exact=True).check()
+    apply_column_menu(lot)
+    expect(stems).to_have_text(["run-2"])
+    loads = _count_table_loads(page)
+
+    closings = {
+        "Cancel": lambda menu: cancel_button(menu).click(),
+        "Escape": lambda _menu: page.keyboard.press("Escape"),
+        "outside": lambda _menu: page.mouse.click(5, 5),
+    }
+    for how, close in closings.items():
+        lot = open_column_menu(table, "lot")
+        lot.get_by_role("checkbox", name="A 1", exact=True).check()
+        lot.get_by_role("checkbox", name="B 1", exact=True).uncheck()
+        choose_null_filter(lot, "Is null")
+        close(lot)
+        expect(lot, how).to_be_hidden()
+        lot = open_column_menu(table, "lot")
+        expect(lot.get_by_role("checkbox", name="A 1", exact=True), how).not_to_be_checked()
+        expect(lot.get_by_role("checkbox", name="B 1", exact=True), how).to_be_checked()
+        expect(null_filter_button(lot, "Any"), how).to_have_attribute("aria-pressed", "true")
+        expect(apply_button(lot), how).to_be_disabled()
+        close_column_menu(page, lot)
+
+    # A typed bound is dropped as well.
+    yield_pct = open_column_menu(table, "yield_pct")
+    yield_pct.get_by_label("yield_pct lower").fill("90")
+    cancel_button(yield_pct).click()
+    expect(yield_pct).to_be_hidden()
+    expect(open_column_menu(table, "yield_pct").get_by_label("yield_pct lower")).to_have_value("")
+    page.wait_for_timeout(500)
+    assert loads == []
+    expect(stems).to_have_text(["run-2"])
+
+
+def test_opening_another_menu_from_the_keyboard_drops_the_draft(page: Page, server_url: str) -> None:
+    """A draft left in one menu is dropped when another column's menu opens with Enter."""
+    page.goto(server_url)
+    stems = _file_stems(page)
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+    lot = open_column_menu(table, "lot")
+    lot.get_by_role("checkbox", name="B 1", exact=True).check()
+
+    table.get_by_role("button", name="yield_pct", exact=True).focus()
+    page.keyboard.press("Enter")
+    expect(column_menu(table, "yield_pct")).to_be_visible()
+    expect(lot).to_be_hidden()
+    expect(lot.locator("input[value='B']")).not_to_be_checked()
+    # A reload now sends no value of the dropped draft.
+    with page.expect_response(lambda response: "/files?" in response.url) as response:
+        page.evaluate("htmx.trigger('#files', 'dt-reload')")
+    assert "eq__lot" not in response.value.url
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+
+
+def test_chip_removed_under_an_open_draft_clears_the_applied_filter(page: Page, server_url: str) -> None:
+    """A chip's × reached with Tab while its column's menu holds a draft removes the filter, not the draft."""
+    page.goto(server_url)
+    stems = _file_stems(page)
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+    lot = open_column_menu(table, "lot")
+    lot.get_by_role("checkbox", name="B 1", exact=True).check()
+    apply_column_menu(lot)
+    expect(stems).to_have_text(["run-2"])
+    lot = open_column_menu(table, "lot")
+    lot.get_by_role("checkbox", name="A 1", exact=True).check()
+
+    table.get_by_role("button", name="Remove filter lot ∈ {B}").focus()
+    page.keyboard.press("Enter")
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    expect(lot).to_be_hidden()
+    expect(table.locator("[data-dt-filtered]")).to_have_count(0)
+    lot = open_column_menu(table, "lot")
+    expect(lot.get_by_role("checkbox", name="A 1", exact=True)).not_to_be_checked()
+    expect(lot.get_by_role("checkbox", name="B 1", exact=True)).not_to_be_checked()
+
+
+def test_reload_under_an_open_draft_uses_the_applied_filters(page: Page, server_url: str) -> None:
+    """The search reloading while a menu holds a draft sends the applied filters and keeps the draft."""
+    page.goto(server_url)
+    stems = _file_stems(page)
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+    lot = open_column_menu(table, "lot")
+    lot.get_by_role("checkbox", name="B 1", exact=True).check()
+
+    # Focus leaving the menu does not close it.
+    search = table.get_by_role("searchbox", name="Search")
+    search.focus()
+    search.press_sequentially("run-1")
+    expect(stems).to_have_text(["run-1", "run-10"])
+    expect(lot).to_be_visible()
+    expect(lot.get_by_role("checkbox", name="B 1", exact=True)).to_be_checked()
+    expect(apply_button(lot)).to_be_enabled()
+    # The header checkbox, reached without closing the menu, selects the rows
+    # of the applied filters.
+    header = page.get_by_label("Select all filtered files")
+    header.focus()
+    page.keyboard.press("Space")
+    expect(header).to_be_checked()
+    assert sorted(_selection(page)) == ["run-1", "run-10"]
+    expect(lot).to_be_visible()
+    apply_column_menu(lot)
+    expect(stems).to_have_text([])
+
+
+def test_column_menu_sorts_file_list(page: Page, server_url: str) -> None:
+    """The menu sorts ascending or descending, by the absolute values with Abs, and closes."""
+    page.goto(server_url)
+    stems = _file_stems(page)
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+    header = table.locator("th", has=page.locator('[data-dt-column="yield_pct"]'))
+    expect(header.locator(".dt-type")).to_have_text("f64")
+
+    open_column_menu(table, "yield_pct").get_by_role("button", name="Asc").click()
+    expect(stems).to_have_text(["run-2", "run-1", "run-10"])
+    expect(column_menu(table, "yield_pct")).to_be_hidden()
+    expect(header).to_have_attribute("aria-sort", "ascending")
+    expect(header.locator(".dt-sort-mark")).to_have_text("▲")
+
+    open_column_menu(table, "yield_pct").get_by_role("button", name="Desc").click()
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    expect(header).to_have_attribute("aria-sort", "descending")
+    expect(header.locator(".dt-sort-mark")).to_have_text("▼")
+
+    # Abs on the sorted column sorts it again in the same direction; the
+    # flag goes with the reloads and shows in the reopened menu.
+    menu = open_column_menu(table, "yield_pct")
+    expect(menu.get_by_role("button", name="Desc")).to_have_attribute("aria-pressed", "true")
+    absolute = menu.get_by_role("checkbox", name="Abs")
+    expect(absolute).not_to_be_checked()
+    with page.expect_request(lambda request: _sort_query(request.url) == ("yield_pct", "desc", "1")):
+        absolute.check()
+    expect(menu).to_be_hidden()
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    expect(header).to_have_attribute("aria-sort", "descending")
+    menu = open_column_menu(table, "yield_pct")
+    expect(menu.get_by_role("checkbox", name="Abs")).to_be_checked()
+    with page.expect_request(lambda request: _sort_query(request.url) == ("yield_pct", "asc", "1")):
+        menu.get_by_role("button", name="Asc").click()
+    expect(stems).to_have_text(["run-2", "run-1", "run-10"])
+
+    # A text column has no Abs, and its sort turns the absolute sort off.
+    menu = open_column_menu(table, "lot")
+    expect(menu.get_by_role("checkbox", name="Abs")).to_have_count(0)
+    with page.expect_request(lambda request: _sort_query(request.url) == ("lot", "asc", "")):
+        menu.get_by_role("button", name="Asc").click()
+    lot = table.locator("th", has=page.locator('[data-dt-column="lot"]'))
+    expect(lot.locator(".dt-sort-mark")).to_have_text("▲")
+    expect(header.locator(".dt-sort-mark")).to_have_text("")
+
+
+def _sort_query(url: str) -> tuple[str, str, str] | None:
+    """Return the sort, order, and abs of a file table request, or ``None`` for another URL."""
+    if "/files?" not in url:
+        return None
+    query = parse_qs(urlparse(url).query, keep_blank_values=True)
+    return tuple(query.get(f"files.{name}", [""])[-1] for name in ("sort", "order", "abs"))
+
+
+def test_column_menu_works_from_the_keyboard(page: Page, server_url: str) -> None:
+    """A column name opens its menu with Enter, Tab reaches it, and Escape closes it."""
+    page.goto(server_url)
+    expect(_file_stems(page)).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+    button = table.get_by_role("button", name="lot", exact=True)
+    menu = column_menu(table, "lot")
+
+    button.focus()
+    page.keyboard.press("Enter")
+    expect(menu).to_be_visible()
+    page.keyboard.press("Tab")
+    expect(menu.get_by_role("button", name="Asc")).to_be_focused()
+    page.keyboard.press("Escape")
+    expect(menu).to_be_hidden()
+    expect(button).to_be_focused()
+
+    page.keyboard.press("Enter")
+    expect(menu).to_be_visible()
+    page.mouse.click(5, 5)
+    expect(menu).to_be_hidden()
+
+    # A menu reopened after a reload keeps its draft and the focus, and also
+    # returns the focus on Escape.
+    button.focus()
+    page.keyboard.press("Enter")
+    expect(menu).to_be_visible()
+    # Asc, Desc (a text column has no Abs), the search, then the first value.
+    for _ in range(4):
+        page.keyboard.press("Tab")
+    first = menu.get_by_role("checkbox", name="A 1", exact=True)
+    expect(first).to_be_focused()
+    page.keyboard.press("Space")
+    expect(first).to_be_checked()
+    expect(apply_button(menu)).to_be_enabled()
+    # Measured with the notice of unapplied changes, which makes the menu taller.
+    opened = menu.bounding_box()
+    anchor = button.bounding_box()
+    with page.expect_response(lambda response: "/files?" in response.url):
+        page.evaluate("htmx.trigger('#files', 'dt-reload')")
+    expect(_file_stems(page)).to_have_text(["run-1", "run-2", "run-10"])
+    expect(menu).to_be_visible()
+    expect(first).to_be_focused()
+    expect(first).to_be_checked()
+    expect(apply_button(menu)).to_be_enabled()
+    # The reopened menu stays under its column name after htmx settles.
+    page.wait_for_timeout(200)
+    reopened = menu.bounding_box()
+    moved = table.get_by_role("button", name="lot", exact=True).bounding_box()
+    assert opened is not None and reopened is not None
+    assert anchor is not None and moved is not None
+    assert (reopened["x"] - moved["x"], reopened["y"] - moved["y"]) == (
+        opened["x"] - anchor["x"],
+        opened["y"] - anchor["y"],
+    )
+    page.keyboard.press("Escape")
+    expect(menu).to_be_hidden()
+    expect(table.get_by_role("button", name="lot", exact=True)).to_be_focused()
+    page.keyboard.press("Enter")
+    expect(first).not_to_be_checked()
+
+
+def test_column_menu_copies_the_column_name(page: Page, server_url: str) -> None:
+    """The copy button puts the frame's column name on the clipboard and closes the menu."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    page.goto(server_url)
+    expect(_file_stems(page)).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+
+    open_column_menu(table, "file").get_by_role("button", name="Copy column name").click()
+
+    expect(column_menu(table, "file")).to_be_hidden()
+    assert page.evaluate("navigator.clipboard.readText()") == "stem"
+
+
+def test_column_menu_is_not_clipped_by_the_table(page: Page, server_url: str) -> None:
+    """A menu taller than the table's scroll box shows whole, over the page."""
+    page.goto(server_url)
+    expect(_file_stems(page)).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+    scroll = table.locator(".dt-scroll")
+    scroll.evaluate("box => { box.style.maxHeight = '4rem'; }")
+
+    menu = open_column_menu(table, "lot")
+
+    menu_box = menu.bounding_box()
+    scroll_box = scroll.bounding_box()
+    assert menu_box is not None and scroll_box is not None
+    assert menu_box["height"] > scroll_box["height"]
+    # Its top and bottom are on top of the page, not clipped or covered.
+    corners = [
+        [menu_box["x"] + 10, menu_box["y"] + 5],
+        [menu_box["x"] + 10, menu_box["y"] + menu_box["height"] - 5],
+    ]
+    assert menu.evaluate(
+        "(menu, corners) => corners.every(([x, y]) => menu.contains(document.elementFromPoint(x, y)))",
+        corners,
+    )
+
+
+@pytest.mark.table_config(page_size=2)
+def test_sorting_and_filtering_return_to_first_page(page: Page, server_url: str) -> None:
+    """Changing the sort order or a filter shows the first page; the header then selects the rows of every page."""
+    page.goto(server_url)
+    stems = _file_stems(page)
+    expect(stems).to_have_text(["run-1", "run-2"])
+
+    page.get_by_role("button", name="Next page").click()
+    expect(stems).to_have_text(["run-10"])
+    open_column_menu(_table(page), "file").get_by_role("button", name="Desc").click()
+    expect(stems).to_have_text(["run-10", "run-2"])
+
+    page.get_by_role("button", name="Next page").click()
+    expect(stems).to_have_text(["run-1"])
+    _table(page).get_by_role("searchbox", name="Search").fill("run")
+    expect(stems).to_have_text(["run-10", "run-2"])
+
+    # The header checkbox also selects the matching row of the next page.
+    page.get_by_label("Select all filtered files").check()
+    assert sorted(_selection(page)) == ["run-1", "run-10", "run-2"]
+    page.get_by_role("button", name="Next page").click()
+    expect(stems).to_have_text(["run-1"])
+    expect(page.get_by_label("Select run-1", exact=True)).to_be_checked()
+
+
+@pytest.mark.table_config(page_size=1)
+def test_page_controls_move_to_first_last_and_typed_pages(page: Page, server_url: str) -> None:
+    """First, last, and the page number input move between pages; a typed page is kept in range."""
+    page.goto(server_url)
+    stems = _file_stems(page)
+    expect(stems).to_have_text(["run-1"])
+    number = page.get_by_label("Page number")
+    expect(page.get_by_role("button", name="First page")).to_be_disabled()
+    expect(page.get_by_role("button", name="Previous page")).to_be_disabled()
+    expect(page.locator(".dt-page-jump")).to_have_text(re.compile(r"Page\s+of 3"))
+
+    page.get_by_role("button", name="Last page").click()
+    expect(stems).to_have_text(["run-10"])
+    expect(number).to_have_value("3")
+    expect(page.get_by_role("button", name="Next page")).to_be_disabled()
+
+    number.fill("2")
+    number.press("Enter")
+    expect(stems).to_have_text(["run-2"])
+    expect(page.locator("[data-dt-page-range]")).to_have_text("2–2 of 3")
+
+    number.fill("9")
+    number.press("Enter")
+    expect(stems).to_have_text(["run-10"])
+    expect(number).to_have_value("3")
+
+    # A page typed right after moving is not undone by the input replaced
+    # in the move (its change event must not ask for the old page again).
+    requests: list[str] = []
+    page.on("request", lambda request: requests.append(request.url))
+    for typed, stem in (("1", "run-1"), ("2", "run-2"), ("3", "run-10")) * 2:
+        number.fill(typed)
+        number.press("Enter")
+        expect(stems).to_have_text([stem])
+        expect(number).to_have_value(typed)
+    assert len([url for url in requests if "/files?" in url]) == 6
+
+    number.fill("")
+    number.press("Tab")
+    expect(number).to_have_value("3")
+    page.get_by_role("button", name="First page").click()
+    expect(stems).to_have_text(["run-1"])
+
+
+@pytest.mark.table_config(page_size=1)
+def test_failed_page_move_can_be_retried_with_the_same_number(
+    page: Page,
+    server_url: str,
+    expected_console_errors: list[str],
+) -> None:
+    """After a failed move, Enter on the same page number asks for it again."""
+    expected_console_errors.extend(["503", "htmx:responseError"])
+    page.goto(server_url)
+    stems = _file_stems(page)
+    expect(stems).to_have_text(["run-1"])
+    failures: list[str] = []
+
+    def fail_once(route: Route) -> None:
+        """Answer the first request for page 2 with 503, then pass them on."""
+        if "files.page=2" in route.request.url and not failures:
+            failures.append(route.request.url)
+            route.fulfill(status=503, body="unavailable")
+        else:
+            route.continue_()
+
+    page.route("**/files?*", fail_once)
+    number = page.get_by_label("Page number")
+
+    number.fill("2")
+    with page.expect_response(lambda response: response.status == 503):
+        number.press("Enter")
+    expect(stems).to_have_text(["run-1"])
+    assert len(failures) == 1
+    number.press("Enter")
+    expect(stems).to_have_text(["run-2"])
+    expect(number).to_have_value("2")
+
+
+@pytest.mark.table_config(page_size=1)
+def test_page_move_replacing_a_pending_one_is_asked_once(
+    page: Page,
+    server_url: str,
+    expected_console_errors: list[str],
+    held_routes: list[Route],
+) -> None:
+    """Moving again before a move answers, then leaving the input, asks for each page once."""
+    # htmx logs the request that the newer one replaces (hx-sync) as aborted.
+    expected_console_errors.extend(["htmx:afterRequest", "htmx:sendAbort"])
+    page.goto(server_url)
+    stems = _file_stems(page)
+    expect(stems).to_have_text(["run-1"])
+    asked: list[str] = []
+
+    def hold(route: Route) -> None:
+        """Keep every table request waiting until released."""
+        asked.append(re.sub(r".*files\.page=(\d+).*", r"\1", route.request.url))
+        held_routes.append(route)
+
+    page.route("**/files?*", hold)
+    number = page.get_by_label("Page number")
+
+    number.fill("2")
+    number.press("Enter")
+    number.fill("3")
+    number.press("Enter")
+    number.press("Tab")
+    page.wait_for_timeout(300)
+    page.unroute("**/files?*")
+    for route in held_routes:
+        # Unlike continue_, passing on does not fail for a request the page aborted.
+        route.fallback()
+
+    expect(stems).to_have_text(["run-10"])
+    assert asked == ["2", "3"]
+
+
+def _selection(page: Page) -> list[str]:
+    """Return the keys in the selection input of the file table."""
+    return page.evaluate("JSON.parse(document.getElementById('files-selection').value)")
+
+
+def _row(page: Page, stem: str) -> Locator:
+    """Return the file table row of ``stem``."""
+    return page.locator(f'#files tr[data-dt-key="{stem}"]')
+
+
+def test_row_click_toggles_its_selection(page: Page, server_url: str) -> None:
+    """A click on a row toggles it once; a click on its checkbox too; a text drag does not."""
+    page.goto(server_url)
+    expect(_file_stems(page)).to_have_text(["run-1", "run-2", "run-10"])
+    check = page.get_by_label("Select run-2", exact=True)
+    count = page.locator("[data-dt-selected-count]")
+    expect(count).to_have_text("0 selected")
+    expect(_row(page, "run-2")).to_have_css("cursor", "pointer")
+
+    _row(page, "run-2").locator("td").nth(1).click()
+    expect(check).to_be_checked()
+    expect(count).to_have_text("1 selected")
+    _row(page, "run-2").locator("td").last.click()
+    expect(check).not_to_be_checked()
+    check.click()
+    expect(check).to_be_checked()
+    assert _selection(page) == ["run-2"]
+
+    # Dragging over the file name selects its text, not the row. The click on
+    # the last cell scrolled the table sideways, so scroll the name back into
+    # view; a drag off screen would select another text instead.
+    cell = _row(page, "run-1").locator("td").nth(1)
+    cell.scroll_into_view_if_needed()
+    box = cell.bounding_box()
+    assert box is not None
+    page.mouse.move(box["x"] + 4, box["y"] + box["height"] / 2)
+    page.mouse.down()
+    page.mouse.move(box["x"] + box["width"] - 4, box["y"] + box["height"] / 2, steps=5)
+    page.mouse.up()
+    assert "run-1" in page.evaluate("document.getSelection().toString()")
+    expect(page.get_by_label("Select run-1", exact=True)).not_to_be_checked()
+
+    page.get_by_role("button", name="Clear", exact=True).click()
+    expect(check).not_to_be_checked()
+    expect(count).to_have_text("0 selected")
+    expect(page.get_by_role("button", name="Clear", exact=True)).to_be_disabled()
+    assert _selection(page) == []
+
+
+def test_shift_click_selects_and_clears_a_range(page: Page, server_url: str) -> None:
+    """Shift + click on a row or a checkbox changes every row from the one clicked before."""
+    page.goto(server_url)
+    expect(_file_stems(page)).to_have_text(["run-1", "run-2", "run-10"])
+
+    _row(page, "run-1").locator("td").nth(1).click()
+    _row(page, "run-10").locator("td").nth(1).click(modifiers=["Shift"])
+    for stem in ("run-1", "run-2", "run-10"):
+        expect(page.get_by_label(f"Select {stem}", exact=True)).to_be_checked()
+    expect(page.locator("[data-dt-selected-count]")).to_have_text("3 selected")
+    assert page.evaluate("document.getSelection().toString()") == ""
+
+    # The anchor is now run-10; unchecking run-2 with Shift clears both.
+    page.get_by_label("Select run-2", exact=True).click(modifiers=["Shift"])
+    expect(page.get_by_label("Select run-2", exact=True)).not_to_be_checked()
+    expect(page.get_by_label("Select run-10", exact=True)).not_to_be_checked()
+    expect(page.get_by_label("Select run-1", exact=True)).to_be_checked()
+    assert _selection(page) == ["run-1"]
+
+
+def test_header_checkbox_toggles_matching_rows(page: Page, server_url: str) -> None:
+    """The header checkbox checks or unchecks every matching row and shows a mix."""
+    page.goto(server_url)
+    expect(_file_stems(page)).to_have_text(["run-1", "run-2", "run-10"])
+    header = page.get_by_label("Select all filtered files")
+    rows = page.locator("#files tbody input[data-dt-row-check]")
+    expect(header).not_to_be_checked()
+
+    header.check()
+    for index in range(3):
+        expect(rows.nth(index)).to_be_checked()
+
+    rows.nth(1).uncheck()
+    expect(header).not_to_be_checked()
+    expect(header).to_have_js_property("indeterminate", True)
+
+    header.click()
+    for index in range(3):
+        expect(rows.nth(index)).to_be_checked()
+    expect(header).to_have_js_property("indeterminate", False)
+
+    header.uncheck()
+    for index in range(3):
+        expect(rows.nth(index)).not_to_be_checked()
+
+    # The header follows the rows matching the filters; it leaves the
+    # selection of the other rows alone.
+    rows.nth(0).check()
+    table = _table(page)
+    lot = open_column_menu(table, "lot")
+    lot.get_by_role("checkbox", name="B 1", exact=True).check()
+    apply_column_menu(lot)
+    expect(_file_stems(page)).to_have_text(["run-2"])
+    expect(header).not_to_be_checked()
+    expect(header).to_have_js_property("indeterminate", False)
+    header.check()
+    expect(rows.nth(0)).to_be_checked()
+
+    lot = open_column_menu(table, "lot")
+    lot.get_by_role("checkbox", name="B 1", exact=True).uncheck()
+    apply_column_menu(lot)
+    expect(_file_stems(page)).to_have_text(["run-1", "run-2", "run-10"])
+    expect(rows.nth(0)).to_be_checked()
+    expect(rows.nth(1)).to_be_checked()
+    expect(rows.nth(2)).not_to_be_checked()
+    expect(header).to_have_js_property("indeterminate", True)
+
+
+def test_file_table_scrolls_under_a_fixed_header(page: Page, server_url: str) -> None:
+    """The table has a height limit and keeps its header on top."""
+    page.goto(server_url)
+    expect(_file_stems(page)).to_have_text(["run-1", "run-2", "run-10"])
+
+    expect(page.locator(".dt-scroll")).to_have_css("overflow", "auto")
+    assert page.locator(".dt-scroll").evaluate(
+        "box => getComputedStyle(box).maxHeight !== 'none'"
+    )
+    expect(page.locator(".dt-table thead th").first).to_have_css("position", "sticky")
+
+
+def test_filter_chips_list_and_remove_the_filters_in_use(page: Page, server_url: str) -> None:
+    """Each filter in use is a chip above the table whose × removes it."""
+    page.goto(server_url)
+    stems = _file_stems(page)
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+    chips = table.locator(".dt-chip-label")
+    expect(chips).to_have_count(0)
+
+    lot = open_column_menu(table, "lot")
+    lot.get_by_role("checkbox", name="A 1", exact=True).check()
+    lot.get_by_role("checkbox", name="B 1", exact=True).check()
+    apply_column_menu(lot)
+    expect(stems).to_have_text(["run-1", "run-2"])
+    yield_pct = open_column_menu(table, "yield_pct")
+    choose_null_filter(yield_pct, "Is not null")
+    yield_pct.get_by_label("yield_pct lower").fill("90")
+    apply_column_menu(yield_pct)
+    expect(stems).to_have_text(["run-1"])
+    expect(chips).to_have_text(["lot ∈ {A, B}", "yield_pct ≥ 90", "yield_pct is_not_null"])
+
+    table.get_by_role("button", name="Remove filter yield_pct ≥ 90").click()
+    expect(stems).to_have_text(["run-1", "run-2"])
+    expect(chips).to_have_text(["lot ∈ {A, B}", "yield_pct is_not_null"])
+    yield_pct = open_column_menu(table, "yield_pct")
+    expect(yield_pct.get_by_label("yield_pct lower")).to_have_value("")
+    close_column_menu(page, yield_pct)
+
+    table.get_by_role("button", name="Remove filter yield_pct is_not_null").click()
+    expect(chips).to_have_text(["lot ∈ {A, B}"])
+    expect(null_filter_button(open_column_menu(table, "yield_pct"), "Any")).to_have_attribute("aria-pressed", "true")
+    close_column_menu(page, column_menu(table, "yield_pct"))
+
+    table.get_by_role("button", name="Remove filter lot ∈ {A, B}").click()
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    expect(chips).to_have_count(0)
+    expect(table.locator("[data-dt-filtered]")).to_have_count(0)
+
+
+def test_category_column_menu_searches_its_values(page: Page, server_url: str) -> None:
+    """The search above a category column's values combines with them and the null filter by AND."""
+    page.goto(server_url)
+    stems = _file_stems(page)
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+    chips = table.locator(".dt-chip-label")
+    loads = _count_table_loads(page)
+
+    # The search sits above the list of values and applies on Enter.
+    lot = open_column_menu(table, "lot")
+    search = lot.get_by_role("textbox", name="Search lot")
+    expect(lot.locator(".dt-filter > *").first).to_have_attribute("name", "files.q__lot")
+    search.fill("b")
+    search.press("Enter")
+    expect(lot).to_be_hidden()
+    expect(stems).to_have_text(["run-2"])
+    assert "files.q__lot=b" in loads[-1]
+    expect(chips).to_have_text(['lot ~ "b"'])
+    expect(table.locator("[data-dt-filtered]")).to_have_count(1)
+    table.get_by_role("button", name="Export", exact=True).click()
+    export = table.get_by_role("dialog", name="Export")
+    expect(export.get_by_role("group", name="Filtered rows")).to_contain_text("Filtered rows 1")
+    page.keyboard.press("Escape")
+
+    # AND with the values checked.
+    lot = open_column_menu(table, "lot")
+    expect(search).to_have_value("b")
+    lot.get_by_role("checkbox", name="A 1", exact=True).check()
+    apply_column_menu(lot)
+    expect(stems).to_have_text([])
+    expect(chips).to_have_text(['lot ~ "b"', "lot ∈ {A}"])
+
+    # The chip's × empties the search only.
+    table.get_by_role("button", name='Remove filter lot ~ "b"').click()
+    expect(stems).to_have_text(["run-1"])
+    expect(chips).to_have_text(["lot ∈ {A}"])
+    lot = open_column_menu(table, "lot")
+    expect(search).to_have_value("")
+
+    # Clear removes the search, the values, and the null filter together.
+    search.fill("A")
+    choose_null_filter(lot, "Is not null")
+    apply_column_menu(lot)
+    expect(chips).to_have_text(['lot ~ "A"', "lot ∈ {A}", "lot is_not_null"])
+    expect(stems).to_have_text(["run-1"])
+    lot = open_column_menu(table, "lot")
+    clear_filter_button(lot).click()
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    expect(chips).to_have_count(0)
+    lot = open_column_menu(table, "lot")
+    expect(search).to_have_value("")
+    expect(null_filter_button(lot, "Any")).to_have_attribute("aria-pressed", "true")
+
+
+def test_columns_menu_hides_columns_and_remembers_them(page: Page, server_url: str) -> None:
+    """Unchecked columns are hidden, also after reloads, until checked again."""
+    page.goto(server_url)
+    stems = _file_stems(page)
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+    shape = table.locator("[data-dt-shape]")
+    expect(shape).to_have_text("3 rows, 7 columns")
+    lot_header = table.locator("th", has=page.locator('[data-dt-column="lot"]'))
+    lot_cell = table.locator('tr[data-dt-key="run-1"] td:nth-child(3)')
+    expect(lot_cell).to_have_text("A")
+
+    table.get_by_role("button", name="Columns", exact=True).click()
+    menu = table.get_by_role("dialog", name="Columns")
+    expect(menu).to_be_visible()
+    expect(menu.get_by_role("checkbox", name="file", exact=True)).to_be_disabled()
+    menu.get_by_role("checkbox", name="lot", exact=True).uncheck()
+    expect(lot_header).to_be_hidden()
+    expect(lot_cell).to_be_hidden()
+    expect(shape).to_have_text("3 rows, 6 columns")
+    page.keyboard.press("Escape")
+    expect(menu).to_be_hidden()
+    expect(table.get_by_role("button", name="Columns", exact=True)).to_be_focused()
+
+    # Reloading the table, or the page, keeps the column hidden.
+    open_column_menu(table, "file").get_by_role("button", name="Desc").click()
+    expect(stems).to_have_text(["run-10", "run-2", "run-1"])
+    expect(lot_header).to_be_hidden()
+    page.reload()
+    # The sort is kept too.
+    expect(stems).to_have_text(["run-10", "run-2", "run-1"])
+    expect(lot_header).to_be_hidden()
+    expect(shape).to_have_text("3 rows, 6 columns")
+    assert page.evaluate("localStorage.getItem('datatable:hidden-columns:files')") == '["lot"]'
+
+    table.get_by_role("button", name="Columns", exact=True).click()
+    expect(menu.get_by_role("checkbox", name="lot", exact=True)).not_to_be_checked()
+    menu.get_by_role("checkbox", name="lot", exact=True).check()
+    expect(lot_header).to_be_visible()
+    expect(lot_cell).to_have_text("A")
+    expect(shape).to_have_text("3 rows, 7 columns")
+
+
+def test_columns_menu_keeps_the_choice_without_storage(page: Page, server_url: str) -> None:
+    """Where localStorage fails, hidden columns stay hidden across reloads of the table."""
+    page.add_init_script(
+        "for (const name of ['getItem', 'setItem']) {"
+        " Storage.prototype[name] = () => { throw new DOMException('denied', 'QuotaExceededError'); }; }"
+    )
+    page.goto(server_url)
+    stems = _file_stems(page)
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+    lot_header = table.locator("th", has=page.locator('[data-dt-column="lot"]'))
+
+    table.get_by_role("button", name="Columns", exact=True).click()
+    table.get_by_role("dialog", name="Columns").get_by_role("checkbox", name="lot", exact=True).uncheck()
+    expect(lot_header).to_be_hidden()
+    page.keyboard.press("Escape")
+
+    table.get_by_role("searchbox", name="Search").fill("run-1")
+    expect(stems).to_have_text(["run-1", "run-10"])
+    expect(lot_header).to_be_hidden()
+    expect(table.locator("[data-dt-shape]")).to_have_text("2 rows, 6 columns")
+    open_column_menu(table, "file").get_by_role("button", name="Desc").click()
+    expect(stems).to_have_text(["run-10", "run-1"])
+    expect(lot_header).to_be_hidden()
+
+
+def _export(page: Page, name: str) -> bytes:
+    """Click an "Export" menu button of the file table and return the downloaded file."""
+    table = _table(page)
+    table.get_by_role("button", name="Export", exact=True).click()
+    menu = table.get_by_role("dialog", name="Export")
+    expect(menu).to_be_visible()
+    with page.expect_download() as download:
+        menu.get_by_role("button", name=name, exact=True).click()
+    expect(menu).to_be_hidden()
+    path = download.value.path()
+    assert re.fullmatch(r"catalog_\d{8}-\d{6}\.(csv|parquet)", download.value.suggested_filename)
+    return path.read_bytes()
+
+
+def test_export_downloads_the_filtered_and_selected_files(page: Page, server_url: str) -> None:
+    """Export writes every filtered file in the table's order, or the selected files."""
+    page.goto(server_url)
+    stems = _file_stems(page)
+    expect(stems).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+    _row(page, "run-2").locator("td").nth(1).click()
+    table.get_by_role("searchbox", name="Search").fill("run-1")
+    expect(stems).to_have_text(["run-1", "run-10"])
+    open_column_menu(table, "file").get_by_role("button", name="Desc").click()
+    expect(stems).to_have_text(["run-10", "run-1"])
+    table.get_by_role("button", name="Export", exact=True).click()
+    menu = table.get_by_role("dialog", name="Export")
+    expect(menu.get_by_role("group", name="Filtered rows")).to_contain_text("Filtered rows 2")
+    expect(menu.get_by_role("group", name="Selected rows")).to_contain_text("Selected rows 1")
+    page.keyboard.press("Escape")
+
+    content = _export(page, "Export filtered rows as CSV")
+
+    assert content.startswith(b"\xef\xbb\xbf")
+    lines = content[3:].decode("utf-8").splitlines()
+    assert lines[0] == "stem,lot,date,yield_pct,n_steps,n_segments,n_rows"
+    assert [line.split(",")[0] for line in lines[1:]] == ["run-10", "run-1"]
+
+    content = _export(page, "Export selected rows as Parquet")
+
+    assert pl.read_parquet(io.BytesIO(content))["stem"].to_list() == ["run-2"]
+
+
+def test_export_of_no_selected_file_is_disabled_until_one_is_selected(page: Page, server_url: str) -> None:
+    """The selected rows' buttons follow the selection without a reload."""
+    page.goto(server_url)
+    expect(_file_stems(page)).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+    # The menu is closed, so its button is found by its attributes.
+    selected = table.locator("[data-dt-export=csv][data-dt-export-rows=selected]")
+    expect(selected).to_be_disabled()
+
+    _row(page, "run-1").locator("td").nth(1).click()
+
+    expect(selected).to_be_enabled()
+    expect(table.locator("[data-dt-export-selected-count]")).to_have_text("1")
+
+
+def test_failed_export_shows_the_reason_in_the_menu(
+    page: Page, server_url: str, expected_console_errors: list[str]
+) -> None:
+    """An export the server rejects says why and keeps the menu open."""
+    expected_console_errors.append("400")
+    page.route(
+        "**/files/export",
+        lambda route: route.fulfill(status=400, json={"detail": "invalid filter"}),
+    )
+    page.goto(server_url)
+    expect(_file_stems(page)).to_have_text(["run-1", "run-2", "run-10"])
+    table = _table(page)
+    table.get_by_role("button", name="Export", exact=True).click()
+    menu = table.get_by_role("dialog", name="Export")
+
+    menu.get_by_role("button", name="Export filtered rows as CSV").click()
+
+    expect(menu.get_by_role("alert")).to_have_text("Export failed: 400 invalid filter")
+    expect(menu).to_be_visible()
+    expect(menu.get_by_role("button", name="Export filtered rows as CSV")).to_be_enabled()

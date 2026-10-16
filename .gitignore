@@ -20,3 +20,6 @@ wheels/
 
 # tmp
 /tmp/
+
+# Playwright traces of failed E2E tests
+/test-results/
