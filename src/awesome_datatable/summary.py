@@ -45,32 +45,6 @@ class TableSummary:
     histograms: dict[str, ColumnHistogram]
 
 
-def choice_options(
-    frame: pl.DataFrame | pl.LazyFrame, config: TableConfig
-) -> dict[str, list[str]]:
-    """Return the distinct values of each ``"choice"`` column.
-
-    Parameters
-    ----------
-    frame : pl.DataFrame | pl.LazyFrame
-        Every row of the table.
-    config : TableConfig
-        Table settings.
-
-    Returns
-    -------
-    dict[str, list[str]]
-        Non-null values as sorted text, keyed by column name.
-    """
-    names = config.choice_columns
-    if not names:
-        return {}
-    values = frame.lazy().select(
-        pl.col(name).cast(pl.String).drop_nulls().unique().sort().implode() for name in names
-    ).collect()
-    return {name: values[name][0].to_list() for name in names}
-
-
 def summarize_table(
     frame: pl.DataFrame | pl.LazyFrame,
     config: TableConfig,
@@ -85,24 +59,28 @@ def summarize_table(
     config : TableConfig
         Table settings.
     options : Mapping[str, Sequence[str]] | None, default None
-        Values offered by each ``"choice"`` filter; ``choice_options`` of the
-        frame if ``None``. A given value missing from the frame counts 0.
+        Values offered by each ``"choice"`` filter; the sorted distinct
+        values of the frame if ``None``. A given value missing from the frame
+        counts 0.
 
     Returns
     -------
     TableSummary
         The column types, choices, counts, and (with
-        ``TableConfig.histograms``) histograms of the frame.
+        ``TableConfig.histograms``) histograms of the frame. The frame is
+        collected once for the counts (which also give the choices) and, with
+        histograms, twice more.
     """
     schema = dict(frame.lazy().collect_schema())
+    counts = count_values(frame, config)
     return TableSummary(
         schema=schema,
         options=(
-            choice_options(frame, config)
+            {name: sorted(counts.values[name]) for name in config.choice_columns}
             if options is None
             else {name: list(values) for name, values in options.items()}
         ),
-        counts=count_values(frame, config),
+        counts=counts,
         types={column.name: dtype_label(schema[column.name]) for column in config.columns},
         histograms=count_histograms(frame, config, schema) if config.histograms else {},
     )

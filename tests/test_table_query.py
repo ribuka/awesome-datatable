@@ -25,7 +25,6 @@ from awesome_datatable.query import (
     search_terms,
     sort_frame,
 )
-from awesome_datatable.summary import choice_options
 
 
 def _keys(frame: pl.DataFrame, state: TableState, config: TableConfig) -> list[str]:
@@ -436,7 +435,7 @@ def test_choice_options_come_from_the_frame_or_the_caller(
     frame: pl.DataFrame, config: TableConfig
 ) -> None:
     """Choices are the sorted distinct values unless the caller gives them."""
-    assert choice_options(frame, config) == {"group": ["a", "b"]}
+    assert summarize_table(frame, config).options == {"group": ["a", "b"]}
     assert apply_state(frame, TableState(), config).options == {"group": ["a", "b"]}
     summary = summarize_table(frame, config, {"group": ("b", "z")})
     given = apply_state(frame, TableState(), config, summary)
