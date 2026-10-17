@@ -7,7 +7,7 @@ from collections.abc import Iterator, Mapping, Sequence
 import pytest
 
 from awesome_datatable import TableConfig, parse_export, parse_state
-from awesome_datatable.parameters import parameter_lists
+from awesome_datatable.parameters import last_choice, last_value, parameter_lists
 
 QUERY = {
     "t.sort": ["score"],
@@ -112,3 +112,26 @@ def test_parse_export_reads_getlist_like_a_mapping(
     """``parse_export`` gives the same request for both shapes."""
     assert parse_export(shape(EXPORT), config) == parse_export(EXPORT, config)
     assert parse_export(shape(EXPORT), config).selected == ("k1", "k3")
+
+
+def test_last_value_reads_the_last_value_or_the_default() -> None:
+    """The last of several values wins; a parameter without any gives the default."""
+    assert last_value(["a", "b"]) == "b"
+    assert last_value([]) == ""
+    assert last_value([], "[]") == "[]"
+
+
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [(["desc"], "desc"), (["up", " asc "], "asc"), ([], ""), ([" "], "")],
+)
+def test_last_choice_reads_the_stripped_last_value(values: list[str], expected: str) -> None:
+    """The last value is stripped, and a missing or blank one reads as ``""``."""
+    assert last_choice(values, ("", "asc", "desc"), "invalid order") == expected
+
+
+@pytest.mark.parametrize("values", [["up"], ["asc", "up"], []])
+def test_last_choice_rejects_a_value_outside_the_allowed_ones(values: list[str]) -> None:
+    """A value that is not allowed, blank included unless allowed, is a ValueError."""
+    with pytest.raises(ValueError, match="^invalid order: '(up)?'$"):
+        last_choice(values, ("asc", "desc"), "invalid order")

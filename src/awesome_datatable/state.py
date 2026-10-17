@@ -23,7 +23,7 @@ from .parameter_names import (
     SORT_PARAMETER,
     TEXT_PREFIX,
 )
-from .parameters import Parameters, parameter_lists
+from .parameters import Parameters, last_choice, last_value, parameter_lists
 
 # The filter parameter prefixes and the filter kinds they fit.
 FILTER_PREFIXES = {
@@ -37,6 +37,8 @@ FILTER_PREFIXES = {
 # How a null filter treats null values: keep only them, or drop them.
 type NullFilter = Literal["is_null", "is_not_null"]
 NULL_FILTERS: tuple[NullFilter, ...] = get_args(NullFilter.__value__)
+# The values of a null filter parameter: blank for no null filter.
+NULL_CHOICES: tuple[NullFilter | Literal[""], ...] = ("", *NULL_FILTERS)
 
 # A "number" bound kept as an int instead of a float.
 INTEGER = re.compile(r"[+-]?[0-9]+")
@@ -146,40 +148,6 @@ def _parse_bound(raw: str, column: ColumnConfig, key: str) -> Bound:
         raise ValueError(f"invalid bound for {key!r}: {raw!r}") from error
 
 
-def _last(values: Sequence[str]) -> str:
-    """Return the last value of a query parameter, or ``""`` without one."""
-    return values[-1] if values else ""
-
-
-def _parse_null_filter(raw: str, key: str) -> NullFilter | None:
-    """Parse a null filter from a query parameter.
-
-    Parameters
-    ----------
-    raw : str
-        Parameter value; blank means no null filter.
-    key : str
-        Parameter name used in errors.
-
-    Returns
-    -------
-    NullFilter | None
-        ``"is_null"`` or ``"is_not_null"``, or ``None`` for a blank value.
-
-    Raises
-    ------
-    ValueError
-        If the value is neither.
-    """
-    text = raw.strip()
-    if not text:
-        return None
-    for value in NULL_FILTERS:
-        if text == value:
-            return value
-    raise ValueError(f"invalid null filter for {key!r}: {raw!r}")
-
-
 class _Filters(NamedTuple):
     """Column filters parsed from the query parameters of a table.
 
@@ -266,8 +234,10 @@ def _parse_filters(
             if chosen:
                 equals[name] = chosen
         elif prefix == NULL_PREFIX:
-            null_filter = _parse_null_filter(value, config.parameter(key))
-            if null_filter is not None:
+            null_filter = last_choice(
+                every[key], NULL_CHOICES, f"invalid null filter for {config.parameter(key)!r}"
+            )
+            if null_filter:
                 nulls[name] = null_filter
         else:
             bound = _parse_bound(value, column, config.parameter(key))
@@ -317,27 +287,21 @@ def parse_state(parameters: Parameters, config: TableConfig) -> TableState:
         for key, raw in parameter_lists(parameters).items()
         if key.startswith(config.prefix)
     }
-    values = {key: _last(raw) for key, raw in every.items()}
+    values = {key: last_value(raw) for key, raw in every.items()}
     filters = _parse_filters(every, values, config)
 
     sort_by = values.get(SORT_PARAMETER, "") or config.default_sort
     if sort_by is not None and sort_by not in config.sortable_columns:
         raise ValueError(f"unknown sort column: {sort_by!r}")
-    order = values.get(ORDER_PARAMETER, "") or "asc"
-    if order not in ("asc", "desc"):
-        raise ValueError(f"invalid sort order: {order!r}")
-    absolute = values.get(ABSOLUTE_PARAMETER, "").strip()
-    if absolute not in ("", "1"):
-        raise ValueError(f"invalid absolute sort: {absolute!r}")
+    order = last_choice(every.get(ORDER_PARAMETER, ()), ("", "asc", "desc"), "invalid sort order")
+    absolute = last_choice(every.get(ABSOLUTE_PARAMETER, ()), ("", "1"), "invalid absolute sort")
     page = values.get(PAGE_PARAMETER, "").strip() or "1"
     if not (page.isascii() and page.isdigit()) or int(page) < 1:
         raise ValueError(f"invalid page: {page!r}")
     page_size = values.get(PAGE_SIZE_PARAMETER, "").strip()
     if page_size and page_size not in {str(size) for size in config.page_size_choices}:
         raise ValueError(f"invalid page size: {page_size!r}")
-    parts = values.get(PARTS_PARAMETER, "").strip()
-    if parts not in ("", "1"):
-        raise ValueError(f"invalid parts: {parts!r}")
+    parts = last_choice(every.get(PARTS_PARAMETER, ()), ("", "1"), "invalid parts")
 
     ranges = {
         name: (filters.lower.get(name), filters.upper.get(name))
