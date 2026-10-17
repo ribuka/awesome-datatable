@@ -83,7 +83,6 @@
     the table reloads is kept; the bounds have no value from the server but
     this. -#}
 {% macro _filter(config, view, column, index) -%}
-  {% set name = config.parameter(dt_parameters.equals ~ column.name) %}
   <div class="dt-menu-section dt-filter">
     {% if column.filter == "text" %}
       {{ _search(config, view, column, index, column.filter_name) }}
@@ -92,6 +91,7 @@
       {% set values = view.options.get(column.name, []) %}
       {% set chosen = view.state.equals.get(column.name, ()) %}
       {% set counts = view.counts.values.get(column.name, {}) %}
+      {% set name = config.parameter(dt_parameters.equals ~ column.name) %}
       {#- The values sit in a <div>, not directly in the <fieldset>: Chrome
           parses a fieldset with many children in time quadratic in their
           number (20,000 values took 11 s; in a <div>, 0.1 s). -#}
@@ -344,6 +344,39 @@
 </div>
 {%- endmacro %}
 
+{#- The header row of the table, a cell per column after the checkbox
+    column of a selectable table. With `parts` (the reloads of
+    `view.state.parts`), each cell holds only its swapped parts (sort mark,
+    filter mark, histogram, sort and clear buttons of the column menu) and
+    its `aria-sort`, which datatable.js copies; otherwise the full headers
+    with their column menus. `header_blocked` disables the header checkbox. -#}
+{% macro _thead(config, view, parts, header_blocked=false) -%}
+<thead>
+  <tr>
+    {% if parts %}
+      {% if config.selectable %}<th></th>{% endif %}
+    {% elif config.selectable %}
+      {#- The checkbox column always stays at the left while the table
+          scrolls sideways, and the first column (dt-pinned) next to it when
+          the "Pin columns" toggle is on. -#}
+      <th class="dt-check dt-pinned"><input type="checkbox" data-dt-check-all aria-label="{{ config.select_all_label }}"{% if header_blocked %} disabled{% endif %}></th>
+    {% endif %}
+    {% for column in config.columns %}
+      {% if parts %}
+      <th{{ _aria_sort(view, column) }}>
+        {{- _sort_mark(view, column, loop.index) }}{{ _filter_state(view, column, loop.index) }}
+        {%- if column.name in view.histograms %}{{ _histogram(column, view.histograms[column.name], loop.index) }}{% endif %}
+        {%- if column.sortable %}{{ _sorts(view, column, loop.index) }}{% endif %}
+        {%- if column.filter %}{{ _clear_filter(view, column, loop.index) }}{% endif -%}
+      </th>
+      {% else %}
+      <th{% if loop.first %} class="dt-pinned"{% endif %}{{ _aria_sort(view, column) }}>{{ _header(config, view, column, loop.index) }}</th>
+      {% endif %}
+    {% endfor %}
+  </tr>
+</thead>
+{%- endmacro %}
+
 {#- One page of the table with the toolbar above it, its column menus, sort
     and filter marks, column types, the footer (shape, selection count, page controls), and
     (for a selectable table) the keys of every row matching the filters for
@@ -376,19 +409,7 @@
 {{ _matching(config, view) }}
 {{ _limit(config, full) }}
 <table class="dt-table">
-  <thead>
-    <tr>
-      {% if config.selectable %}<th></th>{% endif %}
-      {% for column in config.columns %}
-        <th{{ _aria_sort(view, column) }}>
-          {{- _sort_mark(view, column, loop.index) }}{{ _filter_state(view, column, loop.index) }}
-          {%- if column.name in view.histograms %}{{ _histogram(column, view.histograms[column.name], loop.index) }}{% endif %}
-          {%- if column.sortable %}{{ _sorts(view, column, loop.index) }}{% endif %}
-          {%- if column.filter %}{{ _clear_filter(view, column, loop.index) }}{% endif -%}
-        </th>
-      {% endfor %}
-    </tr>
-  </thead>
+  {{ _thead(config, view, true) }}
   {{ _body(config, view, selected, full) }}
 </table>
 {{ _footer(config, view, selected_count) }}
@@ -403,19 +424,7 @@
 {{ _limit(config, full) }}
 <div class="dt-scroll">
 <table class="dt-table">
-  <thead>
-    <tr>
-      {#- The checkbox column always stays at the left while the table
-          scrolls sideways, and the first column (dt-pinned) next to it when
-          the "Pin columns" toggle is on. -#}
-      {% if config.selectable %}
-        <th class="dt-check dt-pinned"><input type="checkbox" data-dt-check-all aria-label="{{ config.select_all_label }}"{% if header_blocked %} disabled{% endif %}></th>
-      {% endif %}
-      {% for column in config.columns %}
-        <th{% if loop.first %} class="dt-pinned"{% endif %}{{ _aria_sort(view, column) }}>{{ _header(config, view, column, loop.index) }}</th>
-      {% endfor %}
-    </tr>
-  </thead>
+  {{ _thead(config, view, false, header_blocked) }}
   {{ _body(config, view, selected, full) }}
 </table>
 </div>

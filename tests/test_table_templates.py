@@ -1117,3 +1117,38 @@ def test_fragment_of_the_parts_draws_only_the_swapped_parts(
     assert 'name="t.eq__group"' not in html
     assert '<tbody data-dt-part="rows">' in html
     assert 'data-dt-row-check checked' in html
+
+
+@pytest.mark.parametrize("selectable", [True, False])
+def test_fragment_draws_the_same_header_cells_with_and_without_parts(
+    environment: Environment, config: TableConfig, frame: pl.DataFrame, selectable: bool
+) -> None:
+    """Both headers have a cell per column, after the checkbox cell of a selectable table."""
+    config = replace(config, selectable=selectable)
+    parameters = {"t.sort": ["count"], "t.order": ["desc"]}
+    heads = [
+        _render(
+            environment, "{{ fragment(config, view) }}",
+            config=config, view=apply_state(frame, parse_state(query, config), config),
+        ).split("<thead>")[1].split("</thead>")[0]
+        for query in (parameters, {**parameters, "t.parts": ["1"]})
+    ]
+    whole, parts = heads
+
+    cells = len(config.columns) + selectable
+    assert len(re.findall(r"<th[ >]", whole)) == len(re.findall(r"<th[ >]", parts)) == cells
+    assert re.findall(r'aria-sort="(\w+)"', whole) == re.findall(r'aria-sort="(\w+)"', parts) == ["descending"]
+    assert ("data-dt-check-all" in whole) is selectable
+    assert "data-dt-check-all" not in parts
+    assert re.findall(r"<th[^>]*>", whole)[selectable] == '<th class="dt-pinned">'
+
+
+def test_choice_filter_names_only_the_choice_columns(
+    environment: Environment, config: TableConfig, frame: pl.DataFrame
+) -> None:
+    """Only the checkboxes of a choice column carry the ``eq__`` parameter."""
+    view = apply_state(frame, parse_state({}, config), config)
+
+    html = _render(environment, "{{ fragment(config, view) }}", config=config, view=view)
+
+    assert set(re.findall(r'name="(t\.eq__\w+)"', html)) == {"t.eq__group"}
