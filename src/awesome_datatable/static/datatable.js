@@ -4,6 +4,7 @@
 (() => {
   const QUERY_DELAY_MS = 300;
   const RELOAD_EVENT = "dt-reload";
+  const REFRESH_EVENT = "dt-refresh";
   const SELECTION_EVENT = "datatable:selection-change";
 
   // The selection of a selectable table over all pages and filters lives as
@@ -472,7 +473,7 @@
     if (page) {
       page.value = "1";
     }
-    htmx.trigger(root, "dt-refresh");
+    htmx.trigger(root, REFRESH_EVENT);
   });
 
   // Typing in the search box of the whole table reloads the first page
@@ -542,25 +543,22 @@
     }
   });
 
-  // Only the note of the page whose request failed is forgotten: a request
-  // replaced by a newer one (hx-sync) also ends unsuccessfully, and must not
-  // drop the note of the page the newer one asks for.
-  document.addEventListener("htmx:afterRequest", (event) => {
-    const root = event.detail.elt;
-    if (event.detail.successful || !root.matches?.("[data-datatable]")) {
-      return;
-    }
+  // Forgets the note of the page whose request failed (`detail` of
+  // `htmx:afterRequest`), and only that one: a request replaced by a newer
+  // one (hx-sync) also ends unsuccessfully, and must not drop the note of
+  // the page the newer one asks for.
+  function forgetFailedPage(root, detail) {
     // A GET sends the page in the URL, a POST (`hx-post`) in the form body.
     const name = parameterName(root, "page");
-    const path = event.detail.pathInfo?.finalRequestPath ?? "";
+    const path = detail.pathInfo?.finalRequestPath ?? "";
     const failedPage = new URL(path, window.location.href).searchParams.get(name)
-      ?? event.detail.requestConfig?.formData?.get(name) ?? null;
+      ?? detail.requestConfig?.formData?.get(name) ?? null;
     for (const input of root.querySelectorAll("[data-dt-page-input]")) {
       if (String(askedPages.get(input)) === failedPage) {
         askedPages.delete(input);
       }
     }
-  });
+  }
 
   // Clears a filter control: a typed filter is emptied, its values
   // unchecked, and a null filter set back to "Any" (the empty value).
@@ -677,15 +675,26 @@
     storePreference(root, "hidden-columns", [...names]);
   }
 
+  // The `<style>` element of the page with this id, added to the head if
+  // there is none yet.
+  function styleSheet(id) {
+    let sheet = document.getElementById(id);
+    if (!sheet) {
+      sheet = document.createElement("style");
+      sheet.id = id;
+      document.head.append(sheet);
+    }
+    return sheet;
+  }
+
   // Hides the columns unchecked in the "Columns" menu, checks its boxes from
   // the remembered choice when `fromStorage`, and counts the shown columns
   // under the table. The first column is always shown.
   function syncColumns(root, fromStorage) {
     const menu = root.querySelector("[data-dt-columns-menu]");
     const sheetId = `${root.id}-dt-hidden-columns`;
-    let sheet = document.getElementById(sheetId);
     if (!menu) {
-      sheet?.remove();
+      document.getElementById(sheetId)?.remove();
       return;
     }
     const boxes = [...menu.querySelectorAll("[data-dt-show-column]")];
@@ -707,12 +716,7 @@
     if (last !== undefined && last < cells.length) {
       rules.push(`#${CSS.escape(root.id)} .dt-table tr > :nth-child(${last}) { box-shadow: none; }`);
     }
-    if (!sheet) {
-      sheet = document.createElement("style");
-      sheet.id = sheetId;
-      document.head.append(sheet);
-    }
-    sheet.textContent = rules.join("\n");
+    styleSheet(sheetId).textContent = rules.join("\n");
     const count = root.querySelector("[data-dt-column-count]");
     if (count) {
       count.textContent = String(boxes.length - hidden.size);
@@ -799,15 +803,8 @@
   // the rule keeps `--dt-col-min-width` for changes after this.
   function syncWidths(root) {
     const widths = storedWidths(root);
-    const sheetId = `${root.id}-dt-column-widths`;
-    let sheet = document.getElementById(sheetId);
-    if (!sheet) {
-      sheet = document.createElement("style");
-      sheet.id = sheetId;
-      document.head.append(sheet);
-    }
     const cells = [...root.querySelectorAll(".dt-table thead tr > th")];
-    sheet.textContent = cells
+    styleSheet(`${root.id}-dt-column-widths`).textContent = cells
       .map((cell, index) => [cell, cell.querySelector("[data-dt-resize]")?.dataset.dtResize, index + 1])
       .filter(([, name]) => name !== undefined && Object.hasOwn(widths, name))
       .map(([cell, name, child]) => `#${CSS.escape(root.id)} .dt-table thead tr > th:nth-child(${child})`
@@ -1330,10 +1327,18 @@
     }
   });
 
-  // A request that succeeds keeps the query its response applied, which htmx
-  // has swapped in by now. A kept query that fails (its response is not
-  // swapped in) is forgotten, and the table loads again with its applied
-  // query.
+  // Loads the whole fragment again (`dt-refresh`) after the current request
+  // ends, so that hx-sync does not drop the new one.
+  function refreshLater(root) {
+    setTimeout(() => htmx.trigger(root, REFRESH_EVENT));
+  }
+
+  // When a request of a table ends, the table is no longer busy. A request
+  // that succeeds keeps the query its response applied, which htmx has
+  // swapped in by now. One that fails forgets the note of its page
+  // (forgetFailedPage); if it was loading a kept query (its response is not
+  // swapped in), that query is forgotten too, and the table loads again
+  // with its applied query.
   document.addEventListener("htmx:afterRequest", (event) => {
     const root = event.detail.elt;
     if (!root.matches?.("[data-datatable]")) {
@@ -1346,11 +1351,11 @@
       }
       return;
     }
+    forgetFailedPage(root, event.detail);
     if (restoringQueries.has(root)) {
       restoringQueries.delete(root);
       forgetQuery(root);
-      // After this request ends, so that hx-sync does not drop the new one.
-      setTimeout(() => htmx.trigger(root, "dt-refresh"));
+      refreshLater(root);
     }
   });
 
@@ -1431,36 +1436,13 @@
     scroll.scrollTop = row ? row.offsetTop - (header?.offsetHeight ?? 0) : 0;
   }
 
-  // A reload of the table's own (`dt-reload`: sorting, filtering, paging,
-  // the search box) swaps only the changed parts (swapParts), which are all
-  // its response holds. Should they not fit the table (a catalog update
-  // since changed them), the whole fragment is loaded instead
-  // (`dt-refresh`). Other reloads (a trigger of the page, such as a catalog
-  // update) swap the whole fragment with htmx.
-  document.addEventListener("htmx:beforeSwap", (event) => {
-    const root = event.detail.target ?? event.target;
-    if (!root?.matches?.("[data-datatable]") || !event.detail.shouldSwap
-      || event.detail.requestConfig?.triggeringEvent?.type !== RELOAD_EVENT) {
-      return;
-    }
-    const reloaded = event.detail.requestConfig.triggeringEvent;
-    event.detail.shouldSwap = false;
-    if (!swapParts(root, event.detail.serverResponse, reloaded.detail?.keptRow)) {
-      // After this request ends, so that hx-sync does not drop the new one.
-      setTimeout(() => htmx.trigger(root, "dt-refresh"));
-    }
-  });
-
   // A whole swap replaces the menus. The menu open before it, the control
-  // focused in it, and its draft are noted here and restored after the
-  // swap, so that a reload while a menu is open keeps it open as it was.
+  // focused in it, and its draft are noted here (noteOpenMenu) and restored
+  // after the swap (reopenMenu), so that a reload while a menu is open keeps
+  // it open as it was.
   const reopenedMenus = new WeakMap();
 
-  document.addEventListener("htmx:beforeSwap", (event) => {
-    const root = event.detail.target ?? event.target;
-    if (!root?.matches?.("[data-datatable]") || !event.detail.shouldSwap) {
-      return;
-    }
+  function noteOpenMenu(root) {
     const menu = root.querySelector("[data-dt-menu]:popover-open");
     if (!menu) {
       reopenedMenus.delete(root);
@@ -1478,6 +1460,29 @@
         : null,
       draft: hasFilters(menu) && draftOf(menu) ? fieldsOf(queryControls(menu)) : null,
     });
+  }
+
+  // A reload of the table's own (`dt-reload`: sorting, filtering, paging,
+  // the search box) swaps only the changed parts (swapParts), which are all
+  // its response holds, and htmx swaps nothing. Should they not fit the
+  // table (a catalog update since changed them), the whole fragment is
+  // loaded instead (refreshLater). Other reloads (a trigger of the page,
+  // such as a catalog update) swap the whole fragment with htmx, and the
+  // open menu is noted first.
+  document.addEventListener("htmx:beforeSwap", (event) => {
+    const root = event.detail.target ?? event.target;
+    if (!root?.matches?.("[data-datatable]") || !event.detail.shouldSwap) {
+      return;
+    }
+    const triggering = event.detail.requestConfig?.triggeringEvent;
+    if (triggering?.type !== RELOAD_EVENT) {
+      noteOpenMenu(root);
+      return;
+    }
+    event.detail.shouldSwap = false;
+    if (!swapParts(root, event.detail.serverResponse, triggering.detail?.keptRow)) {
+      refreshLater(root);
+    }
   });
 
   function reopenMenu(root) {
@@ -1579,7 +1584,7 @@
     if (kept && !sameQuery(kept, appliedQueryFields(root))) {
       pendingQueries.set(root, kept);
       if (!root.closest("[hidden]")) {
-        htmx.trigger(root, "dt-refresh");
+        htmx.trigger(root, REFRESH_EVENT);
       }
     }
   }

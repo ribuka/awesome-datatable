@@ -108,6 +108,24 @@ def test_script_names_no_query_parameter_itself() -> None:
     assert "root.dataset.dtParameters" in script
 
 
+def test_script_listens_to_each_htmx_event_once() -> None:
+    """datatable.js has one listener per htmx event, so their order is in the code."""
+    script = (STATIC_DIR / "datatable.js").read_text(encoding="utf-8")
+    events = re.findall(r'addEventListener\("(htmx:\w+)"', script)
+
+    assert "htmx:beforeSwap" in events
+    assert "htmx:afterRequest" in events
+    assert len(events) == len(set(events))
+
+
+def test_script_names_the_trigger_events_once() -> None:
+    """datatable.js writes the names of its trigger events only in their constants."""
+    script = (STATIC_DIR / "datatable.js").read_text(encoding="utf-8")
+
+    assert script.count('"dt-reload"') == 1
+    assert script.count('"dt-refresh"') == 1
+
+
 def test_fragment_names_its_query_controls_by_the_parameter_names(
     environment: Environment, config: TableConfig, frame: pl.DataFrame
 ) -> None:
