@@ -9,20 +9,22 @@ from datetime import datetime
 from typing import Literal, NamedTuple, get_args
 
 from .config import ColumnConfig, TableConfig
+from .parameter_names import (
+    ABSOLUTE_PARAMETER,
+    EQUALS_PREFIX,
+    MAX_PREFIX,
+    MIN_PREFIX,
+    NULL_PREFIX,
+    ORDER_PARAMETER,
+    PAGE_PARAMETER,
+    PAGE_SIZE_PARAMETER,
+    PARTS_PARAMETER,
+    SEARCH_PARAMETER,
+    SORT_PARAMETER,
+    TEXT_PREFIX,
+)
 from .parameters import Parameters, parameter_lists
 
-SORT_PARAMETER = "sort"
-ORDER_PARAMETER = "order"
-ABSOLUTE_PARAMETER = "abs"
-PAGE_PARAMETER = "page"
-PAGE_SIZE_PARAMETER = "page_size"
-SEARCH_PARAMETER = "search"
-PARTS_PARAMETER = "parts"
-TEXT_PREFIX = "q__"
-EQUALS_PREFIX = "eq__"
-MIN_PREFIX = "min__"
-MAX_PREFIX = "max__"
-NULL_PREFIX = "null__"
 # The filter parameter prefixes and the filter kinds they fit.
 FILTER_PREFIXES = {
     TEXT_PREFIX: ("text", "choice"),
@@ -107,24 +109,6 @@ class TableState:
             Whether the column has a search, values, bounds, or a null filter.
         """
         return any(name in filters for filters in (self.text, self.equals, self.ranges, self.nulls))
-
-
-def parameter_name(config: TableConfig, name: str) -> str:
-    """Return the query parameter name of one table control.
-
-    Parameters
-    ----------
-    config : TableConfig
-        Table settings.
-    name : str
-        Control name, such as ``"sort"`` or ``"min__<column>"``.
-
-    Returns
-    -------
-    str
-        ``"<table_id>.<name>"``.
-    """
-    return config.prefix + name
 
 
 def _parse_bound(raw: str, column: ColumnConfig, key: str) -> Bound:
@@ -267,13 +251,13 @@ def _parse_filters(
             continue
         prefix = next((prefix for prefix in FILTER_PREFIXES if key.startswith(prefix)), None)
         if prefix is None:
-            raise ValueError(f"unknown parameter: {config.prefix + key!r}")
+            raise ValueError(f"unknown parameter: {config.parameter(key)!r}")
         name = key.removeprefix(prefix)
         column = filtered.get(name)
         if column is None:
             raise ValueError(f"unknown filter column: {name!r}")
         if column.filter not in FILTER_PREFIXES[prefix]:
-            raise ValueError(f"filter {config.prefix + key!r} does not fit column type")
+            raise ValueError(f"filter {config.parameter(key)!r} does not fit column type")
         if prefix == TEXT_PREFIX:
             if value.strip():
                 text[name] = value.strip()
@@ -282,11 +266,11 @@ def _parse_filters(
             if chosen:
                 equals[name] = chosen
         elif prefix == NULL_PREFIX:
-            null_filter = _parse_null_filter(value, config.prefix + key)
+            null_filter = _parse_null_filter(value, config.parameter(key))
             if null_filter is not None:
                 nulls[name] = null_filter
         else:
-            bound = _parse_bound(value, column, config.prefix + key)
+            bound = _parse_bound(value, column, config.parameter(key))
             (lower if prefix == MIN_PREFIX else upper)[name] = bound
 
     return _Filters(text=text, equals=equals, lower=lower, upper=upper, nulls=nulls)

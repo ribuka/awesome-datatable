@@ -38,7 +38,10 @@
     column menu can hold thousands of values). `dt-reload` (the table's own
     reloads) asks for the swapped parts only; `dt-refresh` reloads the
     whole fragment. The requests use `config.method` and also send the
-    inputs named by `config.extra_inputs` (`data-dt-extra-inputs`). -#}
+    inputs named by `config.extra_inputs` (`data-dt-extra-inputs`). The
+    script finds the query parameters by the names of
+    `config.parameter_names` (`data-dt-parameters`), as the macros name
+    them with `config.parameter` and the `dt_parameters` global. -#}
 {% macro container(config, selected=[], locked=false, triggers="", selection_attributes={}) -%}
 <div id="{{ config.table_id }}" class="dt-root" data-datatable hx-{{ config.method }}="{{ config.url }}"
      hx-target="this" hx-swap="innerHTML" hx-sync="this:replace"
@@ -49,6 +52,7 @@
      {%- if config.extra_inputs %} data-dt-extra-inputs="{{ config.extra_inputs|join(' ') }}"{% endif %}
      {%- if config.pin_preference %} data-dt-pin-preference="{{ config.pin_preference }}"{% endif %}
      data-dt-query-columns="{{ config.query_columns|e }}"
+     data-dt-parameters='{{ config.parameter_names|tojson }}'
      {%- if locked %} data-dt-locked{% endif %}>
   {%- if caller is defined %}
   {{ caller() }}
@@ -66,10 +70,10 @@
   {% if view.state.sort_by == column.name %} aria-sort="{{ 'descending' if view.state.descending else 'ascending' }}"{% endif %}
 {%- endmacro %}
 
-{#- The search of a column menu (q__<column>). It is preserved across
+{#- The search of a column menu (`q__<column>`). It is preserved across
     reloads (hx-preserve), so text typed while the table reloads is kept. -#}
 {% macro _search(config, view, column, index, label) -%}
-  <input type="text" id="{{ config.table_id }}-filter-q-{{ index }}" name="{{ config.prefix }}q__{{ column.name }}" value="{{ view.state.text.get(column.name, '') }}" placeholder="Search"
+  <input type="text" id="{{ config.table_id }}-filter-q-{{ index }}" name="{{ config.parameter(dt_parameters.text ~ column.name) }}" value="{{ view.state.text.get(column.name, '') }}" placeholder="Search"
          aria-label="{{ label }}" data-dt-query hx-preserve>
 {%- endmacro %}
 
@@ -79,7 +83,7 @@
     the table reloads is kept; the bounds have no value from the server but
     this. -#}
 {% macro _filter(config, view, column, index) -%}
-  {% set name = config.prefix ~ "eq__" ~ column.name %}
+  {% set name = config.parameter(dt_parameters.equals ~ column.name) %}
   <div class="dt-menu-section dt-filter">
     {% if column.filter == "text" %}
       {{ _search(config, view, column, index, column.filter_name) }}
@@ -104,9 +108,9 @@
       </fieldset>
     {% else %}
       {% set input_type = "datetime-local" if column.filter == "datetime" else "number" %}
-      <input type="{{ input_type }}" id="{{ config.table_id }}-filter-min-{{ index }}" name="{{ config.prefix }}min__{{ column.name }}" step="any"
+      <input type="{{ input_type }}" id="{{ config.table_id }}-filter-min-{{ index }}" name="{{ config.parameter(dt_parameters.min ~ column.name) }}" step="any"
              aria-label="{{ column.header }} lower" placeholder="min" data-dt-query hx-preserve>
-      <input type="{{ input_type }}" id="{{ config.table_id }}-filter-max-{{ index }}" name="{{ config.prefix }}max__{{ column.name }}" step="any"
+      <input type="{{ input_type }}" id="{{ config.table_id }}-filter-max-{{ index }}" name="{{ config.parameter(dt_parameters.max ~ column.name) }}" step="any"
              aria-label="{{ column.header }} upper" placeholder="max" data-dt-query hx-preserve>
     {% endif %}
   </div>
@@ -120,7 +124,7 @@
   {% set label_id = config.table_id ~ "-nulls-" ~ index %}
   <div class="dt-menu-section dt-nulls">
     <span class="dt-nulls-label" id="{{ label_id }}">Null values <span class="dt-count">{{ view.counts.nulls.get(column.name, 0) }}</span></span>
-    <input type="hidden" name="{{ config.prefix }}null__{{ column.name }}" value="{{ current }}" data-dt-query data-dt-null-value>
+    <input type="hidden" name="{{ config.parameter(dt_parameters.null ~ column.name) }}" value="{{ current }}" data-dt-query data-dt-null-value>
     <div class="dt-segmented" role="group" aria-labelledby="{{ label_id }}">
       {% for value, label in [("", "Any"), ("is_null", "Is null"), ("is_not_null", "Is not null")] %}
         <button type="button" data-dt-null="{{ value }}" aria-pressed="{{ 'true' if value == current else 'false' }}">{{ label }}</button>
@@ -292,7 +296,7 @@
 {% if config.search or config.column_chooser or config.pin_toggle or config.export_url %}
 <div class="dt-toolbar">
   {% if config.search %}
-    <input type="search" id="{{ config.table_id }}-search" class="dt-search" name="{{ config.prefix }}search" value="{{ view.state.search }}" placeholder="Search…"
+    <input type="search" id="{{ config.table_id }}-search" class="dt-search" name="{{ config.parameter(dt_parameters.search) }}" value="{{ view.state.search }}" placeholder="Search…"
            aria-label="Search" data-dt-query hx-preserve>
   {% endif %}
   {% if config.column_chooser or config.pin_toggle or config.export_url %}
@@ -422,10 +426,10 @@
 {#- The hidden sort, order, absolute sort, and page of the view, a swapped part. -#}
 {% macro _state(config, view) -%}
 <div class="dt-state" data-dt-part="state" hidden>
-  <input type="hidden" name="{{ config.prefix }}sort" value="{{ view.state.sort_by or '' }}" data-dt-query>
-  <input type="hidden" name="{{ config.prefix }}order" value="{{ 'desc' if view.state.descending else 'asc' }}" data-dt-query>
-  <input type="hidden" name="{{ config.prefix }}abs" value="{{ '1' if view.state.absolute else '' }}" data-dt-query>
-  <input type="hidden" name="{{ config.prefix }}page" value="{{ view.page.number }}" data-dt-query>
+  <input type="hidden" name="{{ config.parameter(dt_parameters.sort) }}" value="{{ view.state.sort_by or '' }}" data-dt-query>
+  <input type="hidden" name="{{ config.parameter(dt_parameters.order) }}" value="{{ 'desc' if view.state.descending else 'asc' }}" data-dt-query>
+  <input type="hidden" name="{{ config.parameter(dt_parameters.absolute) }}" value="{{ '1' if view.state.absolute else '' }}" data-dt-query>
+  <input type="hidden" name="{{ config.parameter(dt_parameters.page) }}" value="{{ view.page.number }}" data-dt-query>
 </div>
 {%- endmacro %}
 
@@ -480,7 +484,7 @@
   {{ _pager(config, view.page) }}
   {% if config.page_sizes %}
     <label class="dt-page-size">Rows per page
-      <select name="{{ config.prefix }}page_size" data-dt-query data-dt-page-size>
+      <select name="{{ config.parameter(dt_parameters.page_size) }}" data-dt-query data-dt-page-size>
         {% for size in config.page_size_choices %}
           <option value="{{ size }}"{% if size == view.page_size %} selected{% endif %}>{{ size }}</option>
         {% endfor %}

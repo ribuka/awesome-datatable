@@ -13,6 +13,7 @@ import pytest
 from jinja2 import Environment, select_autoescape
 
 from awesome_datatable import (
+    STATIC_DIR,
     ColumnConfig,
     TableConfig,
     TableState,
@@ -86,6 +87,43 @@ def test_container_names_the_columns_its_query_can_name(environment: Environment
     match = re.search(r'data-dt-query-columns="([^"]*)"', html)
     assert match is not None
     assert json.loads(unescape(match[1])) == [["k", "text", True], ["n", None, False]]
+
+
+def test_container_names_the_query_parameters_for_the_script(
+    environment: Environment, config: TableConfig
+) -> None:
+    """The container gives datatable.js every query parameter name of the table."""
+    html = _render(environment, "{{ container(config) }}", config=config)
+
+    match = re.search(r"data-dt-parameters='([^']*)'", html)
+    assert match is not None
+    assert json.loads(unescape(match[1])) == config.parameter_names
+
+
+def test_script_names_no_query_parameter_itself() -> None:
+    """datatable.js builds no ``<table_id>.<name>``; it reads the names from the container."""
+    script = (STATIC_DIR / "datatable.js").read_text(encoding="utf-8")
+
+    assert "${root.id}." not in script
+    assert "root.dataset.dtParameters" in script
+
+
+def test_fragment_names_its_query_controls_by_the_parameter_names(
+    environment: Environment, config: TableConfig, frame: pl.DataFrame
+) -> None:
+    """Every query control of the fragment takes its name from ``dt_parameters``."""
+    renamed = {key: f"x{name}" for key, name in environment.globals["dt_parameters"].items()}
+    environment.globals["dt_parameters"] = renamed
+    shown = replace(config, search=True, page_sizes=(5,))
+    view = apply_state(frame, parse_state({}, shown), shown)
+
+    html = _render(environment, "{{ fragment(config, view) }}", config=shown, view=view)
+
+    names = set(re.findall(r'name="t\.([^"]*)"', html))
+    assert names
+    assert all(name.startswith("x") for name in names)
+    assert {"xsort", "xorder", "xabs", "xpage", "xpage_size", "xsearch"} <= names
+    assert {"xq__name", "xeq__group", "xmin__count", "xmax__when", "xnull__name"} <= names
 
 
 def test_container_of_a_plain_table_has_no_selection(environment: Environment) -> None:

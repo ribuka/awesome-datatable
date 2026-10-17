@@ -22,3 +22,26 @@ def test_table_config_takes_every_field_by_keyword() -> None:
     assert TableConfig(table_id="t", key="key", columns=columns, url="/t").table_id == "t"
     with pytest.raises(TypeError):
         TableConfig("t", "key", columns, "/t")  # type: ignore[misc]
+
+
+def test_table_config_names_its_query_parameters() -> None:
+    """Every query parameter name of a table starts with ``<table_id>.``."""
+    config = TableConfig(table_id="t", key="key", columns=(), url="/t")
+
+    assert config.parameter("min__count") == "t.min__count"
+    assert config.parameter_names == {
+        "sort": "t.sort",
+        "order": "t.order",
+        "absolute": "t.abs",
+        "page": "t.page",
+        "page_size": "t.page_size",
+        "search": "t.search",
+        "parts": "t.parts",
+        "export_format": "t.export_format",
+        "export_rows": "t.export_rows",
+        "text": "t.q__",
+        "equals": "t.eq__",
+        "min": "t.min__",
+        "max": "t.max__",
+        "null": "t.null__",
+    }

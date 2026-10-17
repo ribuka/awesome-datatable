@@ -107,6 +107,18 @@
     return element.closest("[data-datatable]");
   }
 
+  // Returns the name of one of a table's query parameters (`sort`, `page`,
+  // and so on), with the table's prefix, as the container lists them
+  // (`data-dt-parameters`, TableConfig.parameter_names).
+  function parameterName(root, key) {
+    return JSON.parse(root.dataset.dtParameters)[key];
+  }
+
+  // Returns the `data-dt-query` control of a table's query parameter.
+  function queryControl(root, key) {
+    return root.querySelector(`[data-dt-query][name="${CSS.escape(parameterName(root, key))}"]`);
+  }
+
   // Adds `targets` to the selection (`select`) or removes them, when
   // canChange allows it, then shows the selection. Returns whether it
   // changed.
@@ -284,7 +296,7 @@
   // columns, so they are kept only while the table has the same columns
   // (`data-dt-query-columns`); the rows per page and the search box always.
   const KEPT_QUERY_KEY = "datatable:query";
-  const COLUMN_FREE_PARAMETERS = ["page_size", "search"];
+  const COLUMN_FREE_PARAMETERS = ["page_size", "search"]; // data-dt-parameters keys
 
   function keptQueryKey(root) {
     return `${KEPT_QUERY_KEY}:${window.location.pathname}#${root.id}`;
@@ -305,7 +317,7 @@
     if (kept.columns === root.dataset.dtQueryColumns) {
       return fields;
     }
-    const names = COLUMN_FREE_PARAMETERS.map((name) => `${root.id}.${name}`);
+    const names = COLUMN_FREE_PARAMETERS.map((key) => parameterName(root, key));
     const free = new URLSearchParams([...fields].filter(([name]) => names.includes(name)));
     return [...free].length > 0 ? free : null;
   }
@@ -391,8 +403,8 @@
     const error = menu.querySelector("[data-dt-export-error]");
     const buttons = [...menu.querySelectorAll("[data-dt-export]")];
     const fields = withExtraInputs(root, appliedQueryFields(root));
-    fields.append(`${root.id}.export_format`, button.dataset.dtExport);
-    fields.append(`${root.id}.export_rows`, button.dataset.dtExportRows);
+    fields.append(parameterName(root, "export_format"), button.dataset.dtExport);
+    fields.append(parameterName(root, "export_rows"), button.dataset.dtExportRows);
     if (root.dataset.dtSelection) {
       const input = selectionInput(root);
       fields.append(input.name, input.value);
@@ -430,7 +442,7 @@
   const queryTimers = new WeakMap();
 
   // Sets query values of a table and reloads it from the server. `values`
-  // are keyed by control name without the table's prefix. `detail` goes
+  // are keyed by the keys of `data-dt-parameters` (parameterName). `detail` goes
   // with the `dt-reload` event, so it belongs to this request only (its
   // response reads it in htmx:beforeSwap).
   // The table shows that it is busy (`aria-busy`) at once, before anything
@@ -438,9 +450,8 @@
   function reload(root, values, detail = {}) {
     root.setAttribute("aria-busy", "true");
     clearTimeout(queryTimers.get(root));
-    const prefix = `${root.id}.`;
-    for (const [name, value] of Object.entries(values)) {
-      root.querySelector(`[data-dt-query][name="${CSS.escape(prefix + name)}"]`).value = value;
+    for (const [key, value] of Object.entries(values)) {
+      queryControl(root, key).value = value;
     }
     htmx.trigger(root, RELOAD_EVENT, detail);
   }
@@ -457,7 +468,7 @@
     }
     root.setAttribute("aria-busy", "true");
     clearTimeout(queryTimers.get(root));
-    const page = root.querySelector(`[data-dt-query][name="${CSS.escape(`${root.id}.page`)}"]`);
+    const page = queryControl(root, "page");
     if (page) {
       page.value = "1";
     }
@@ -540,7 +551,7 @@
       return;
     }
     // A GET sends the page in the URL, a POST (`hx-post`) in the form body.
-    const name = `${root.id}.page`;
+    const name = parameterName(root, "page");
     const path = event.detail.pathInfo?.finalRequestPath ?? "";
     const failedPage = new URL(path, window.location.href).searchParams.get(name)
       ?? event.detail.requestConfig?.formData?.get(name) ?? null;
@@ -1084,7 +1095,7 @@
       reload(root, {
         sort: sort.dataset.dtSort,
         order: sort.dataset.dtOrder,
-        abs: absoluteOf(sort),
+        absolute: absoluteOf(sort),
         page: "1",
       });
       return;
@@ -1110,10 +1121,10 @@
     if (!root || !box.matches("[data-dt-sort-absolute]")) {
       return;
     }
-    const sort = root.querySelector(`[data-dt-query][name="${CSS.escape(`${root.id}.sort`)}"]`);
+    const sort = queryControl(root, "sort");
     if (sort?.value === box.dataset.dtSortAbsolute) {
       closeMenu(box);
-      reload(root, { abs: box.checked ? "1" : "", page: "1" });
+      reload(root, { absolute: box.checked ? "1" : "", page: "1" });
     }
   });
 
@@ -1306,7 +1317,7 @@
       event.detail.formData.append(name, value);
     }
     if (reloaded) {
-      event.detail.formData.append(`${root.id}.parts`, "1");
+      event.detail.formData.append(parameterName(root, "parts"), "1");
     }
   });
 

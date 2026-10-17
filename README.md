@@ -56,7 +56,7 @@ The paths are under `src/awesome_datatable/`.
 
 | Path | Contents |
 | --- | --- |
-| `config.py` | `TableConfig` and `ColumnConfig`: what the application decides. |
+| `config.py` | `TableConfig` and `ColumnConfig`: what the application decides; `TableConfig.parameter` and `TableConfig.parameter_names` name the table's query parameters (`<table_id>.<name>`). |
 | `state.py` | `TableState` and `parse_state`: query parameters → table state. |
 | `query.py` | `apply_state`: table state + frame (+ its `TableSummary`) → `TableView` (rows of one page, the page and its size, matching keys, choices, counts, column types, filter chips, histograms); `matching_rows` (the filtered and sorted rows that the view and the export share), `filter_expression`, `search_columns`, and `search_terms`. A `LazyFrame` is collected only for the page's rows and for the matching keys (or their count). |
 | `summary.py` | `TableSummary` and `summarize_table`: what the table shows over every row of the frame, whatever the state (column types, choices from `choice_options`, counts, histograms), made once per frame. |
@@ -67,8 +67,9 @@ The paths are under `src/awesome_datatable/`.
 | `counts.py` | `ColumnCounts` and `count_values`: rows of each choice value and null values per filtered column, for the column menus. |
 | `pagination.py` | `Page` and `paginate`: the page among the rows. |
 | `formatting.py` | `format_value`: the cell text (`dt_cell` filter); `dtype_label`: the column type under each column name. |
+| `parameter_names.py` | The query parameter names and column filter prefixes (`sort`, `q__`, and the others) and `PARAMETER_NAMES`, the one place that names them for the parsers, the templates (`dt_parameters`), and `datatable.js` (`data-dt-parameters`). |
 | `parameters.py` | `parameter_lists`: request parameters (an object with `getlist`, or a mapping from each name to its values) → every value of each name as text, for `parse_state` and `parse_export`. |
-| `environment.py` | `configure_environment`: registers the templates, the filter, and the versioned URLs of the static files (`dt_static_file_url`, under `static_url`) with a Jinja2 environment; `STATIC_DIR`. |
+| `environment.py` | `configure_environment`: registers the templates, the filter, and the versioned URLs of the static files (`dt_static_file_url`, under `static_url`), and the query parameter names (`dt_parameters`) with a Jinja2 environment; `STATIC_DIR`. |
 | `templates/datatable/macros.html` | The `assets`, `container`, `fragment`, and `export_button` macros. |
 | `static/datatable.js`, `static/datatable.css` | Browser behavior and look. |
 
@@ -291,8 +292,12 @@ tests import them.
 
 ## Query parameters
 
-Every parameter of a table is named `<table_id>.<name>`; other parameters are
-ignored, so several tables can share a query string. `eq__<column>` is
+Every parameter of a table is named `<table_id>.<name>`
+(`TableConfig.parameter(name)`; `TableConfig.parameter_names` lists them all);
+other parameters are ignored, so several tables can share a query string.
+The names below are defined once in `parameter_names.py`, which the parsers,
+the templates (`dt_parameters`), and `datatable.js` (`data-dt-parameters`)
+share. `eq__<column>` is
 repeated once per value; any other repeated parameter uses its last value.
 Blank values are ignored. An unknown `<table_id>.*` parameter, a filter that
 does not fit its column, or an unparsable value is a `ValueError`.
@@ -612,7 +617,7 @@ container, so several tables can share a page.
 
 | Selector | Element |
 | --- | --- |
-| `.dt-root[data-datatable]` | Container (`id` = `table_id`, `hx-get` or `hx-post` = `url`); `data-dt-extra-inputs` with the ids of `extra_inputs`; `data-dt-locked` when locked; `data-dt-pinned` while the left columns are pinned; `data-dt-max-selected` with the limit; `data-dt-export-url` with `export_url`; `data-dt-pin-preference` with `pin_preference`; `data-dt-query-columns` with `query_columns`; `aria-busy` and `htmx-request` while reloading. |
+| `.dt-root[data-datatable]` | Container (`id` = `table_id`, `hx-get` or `hx-post` = `url`); `data-dt-extra-inputs` with the ids of `extra_inputs`; `data-dt-locked` when locked; `data-dt-pinned` while the left columns are pinned; `data-dt-max-selected` with the limit; `data-dt-export-url` with `export_url`; `data-dt-pin-preference` with `pin_preference`; `data-dt-query-columns` with `query_columns`; `data-dt-parameters` with `parameter_names` (a JSON object of the query parameter names, by which `datatable.js` finds and sends them); `aria-busy` and `htmx-request` while reloading. |
 | `[data-dt-part]` | A part of the fragment swapped after the table's own reloads (`state`, `rows`, `footer`, `matching`, `chips`, `limit`, `export-filtered`, and per column `sort-<n>`, `filtered-<n>`, `histogram-<n>`, `sorts-<n>`, `clear-<n>`). |
 | `.dt-state`, `.dt-chips-slot`, `.dt-filter-state` | Holders of the hidden sort / order / abs / page inputs, of the chips, and of a column's filter mark (no box of their own). |
 | `.dt-scroll` / `.dt-table` | Scroll box with a fixed header / the table (`table-layout: fixed`). |

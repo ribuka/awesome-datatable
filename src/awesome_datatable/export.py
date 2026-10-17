@@ -13,12 +13,10 @@ from urllib.parse import quote
 import polars as pl
 
 from .config import TableConfig
+from .parameter_names import EXPORT_FORMAT_PARAMETER, EXPORT_ROWS_PARAMETER
 from .parameters import Parameters, parameter_lists
 from .query import key_text, matching_rows
 from .state import TableState, parse_state
-
-EXPORT_FORMAT_PARAMETER = "export_format"
-EXPORT_ROWS_PARAMETER = "export_rows"
 
 # The file formats of an export and the rows it holds: every row matching
 # the filters (on all pages), or the selected rows.
@@ -181,8 +179,8 @@ def parse_export(parameters: Parameters, config: TableConfig) -> ExportRequest:
         JSON array of strings, or ``parse_state`` rejects the other fields.
     """
     fields = parameter_lists(parameters)
-    format_key = config.prefix + EXPORT_FORMAT_PARAMETER
-    rows_key = config.prefix + EXPORT_ROWS_PARAMETER
+    format_key = config.parameter(EXPORT_FORMAT_PARAMETER)
+    rows_key = config.parameter(EXPORT_ROWS_PARAMETER)
     file_format = _choice(fields.get(format_key, ()), EXPORT_FORMATS, format_key)
     rows = _choice(fields.get(rows_key, ()), EXPORT_ROWS, rows_key)
     state = parse_state(

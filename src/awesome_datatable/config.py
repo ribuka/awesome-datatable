@@ -6,6 +6,8 @@ import json
 from dataclasses import KW_ONLY, dataclass
 from typing import Literal
 
+from .parameter_names import PARAMETER_NAMES
+
 FilterKind = Literal["text", "choice", "number", "datetime"]
 RequestMethod = Literal["get", "post"]
 
@@ -224,6 +226,38 @@ class TableConfig:
             ``"<table_id>."``.
         """
         return f"{self.table_id}."
+
+    def parameter(self, name: str) -> str:
+        """Return the name of one of the table's query parameters.
+
+        Parameters
+        ----------
+        name : str
+            Parameter name without the table's prefix, such as ``"sort"`` or
+            ``"min__<column>"`` (``parameter_names.py``).
+
+        Returns
+        -------
+        str
+            ``"<table_id>.<name>"``.
+        """
+        return self.prefix + name
+
+    @property
+    def parameter_names(self) -> dict[str, str]:
+        """Return the table's query parameter names by the key of each.
+
+        The container passes them to datatable.js (``data-dt-parameters``),
+        so that the script names no parameter itself.
+
+        Returns
+        -------
+        dict[str, str]
+            ``PARAMETER_NAMES`` with the table's prefix: each parameter's
+            full name, or each column filter's prefix to put the column name
+            after.
+        """
+        return {key: self.parameter(name) for key, name in PARAMETER_NAMES.items()}
 
     @property
     def page_size_choices(self) -> tuple[int, ...]:

@@ -8,6 +8,7 @@ from pathlib import Path
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 
 from .formatting import format_value
+from .parameter_names import PARAMETER_NAMES
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 # Holds datatable.js and datatable.css; the application serves it.
@@ -45,7 +46,10 @@ def configure_environment(environment: Environment, *, static_url: str) -> None:
     environment's own templates, and the ``dt_cell`` filter formats cell
     values with ``format_value``. The global ``dt_static_file_url`` gives the
     versioned URL of a file of ``STATIC_DIR`` under ``static_url``, which
-    the ``assets`` macro uses.
+    the ``assets`` macro uses, and the global ``dt_parameters`` maps a key
+    to each query parameter name or column filter prefix without the
+    table's prefix (``PARAMETER_NAMES``), which the macros name their
+    controls with (``TableConfig.parameter``).
 
     Parameters
     ----------
@@ -64,3 +68,4 @@ def configure_environment(environment: Environment, *, static_url: str) -> None:
     )
     environment.filters["dt_cell"] = format_value
     environment.globals["dt_static_file_url"] = partial(static_file_url, static_url)
+    environment.globals["dt_parameters"] = PARAMETER_NAMES

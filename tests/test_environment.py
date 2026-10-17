@@ -60,3 +60,12 @@ def test_static_url_is_keyword_only() -> None:
     """``static_url`` passed by position is a ``TypeError``."""
     with pytest.raises(TypeError):
         configure_environment(Environment(), "/datatable")  # type: ignore[misc]
+
+
+def test_templates_get_the_query_parameter_names() -> None:
+    """``dt_parameters`` maps each key to the parameter name without the table's prefix."""
+    environment = Environment()
+    configure_environment(environment, static_url="/datatable")
+
+    template = environment.from_string("{{ dt_parameters.absolute }} {{ dt_parameters.equals }}")
+    assert template.render() == "abs eq__"
