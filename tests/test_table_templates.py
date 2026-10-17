@@ -109,13 +109,20 @@ def test_script_names_no_query_parameter_itself() -> None:
 
 
 def test_script_listens_to_each_htmx_event_once() -> None:
-    """datatable.js has one listener per htmx event, so their order is in the code."""
+    """datatable.js has one handler per htmx event, so their order is in the code."""
     script = (STATIC_DIR / "datatable.js").read_text(encoding="utf-8")
-    events = re.findall(r'addEventListener\("(htmx:\w+)"', script)
+    events = re.findall(r'(?:listen|on|onTarget)\("(htmx:\w+)"', script)
 
     assert "htmx:beforeSwap" in events
     assert "htmx:afterRequest" in events
     assert len(events) == len(set(events))
+
+
+def test_script_listens_on_the_document_in_one_place() -> None:
+    """datatable.js adds its document listeners only in its dispatcher (``listen``)."""
+    script = (STATIC_DIR / "datatable.js").read_text(encoding="utf-8")
+
+    assert script.count("document.addEventListener(") == 1
 
 
 def test_script_names_the_trigger_events_once() -> None:

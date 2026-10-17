@@ -71,7 +71,7 @@ The paths are under `src/awesome_datatable/`.
 | `parameters.py` | `parameter_lists`: request parameters (an object with `getlist`, or a mapping from each name to its values) → every value of each name as text, for `parse_state` and `parse_export`. |
 | `environment.py` | `configure_environment`: registers the templates, the filter, and the versioned URLs of the static files (`dt_static_file_url`, under `static_url`), and the query parameter names (`dt_parameters`) with a Jinja2 environment; `STATIC_DIR`. |
 | `templates/datatable/macros.html` | The `assets`, `container`, `fragment`, and `export_button` macros. |
-| `static/datatable.js`, `static/datatable.css` | Browser behavior and look. |
+| `static/datatable.js`, `static/datatable.css` | Browser behavior and look. `datatable.js` listens on the document once per event type and runs the handlers registered for that type in their order: `on` for an element in a table, found by its selector from the event's target, and `onTarget` for the event's own element, such as the container of an htmx event. |
 
 ## Use
 
