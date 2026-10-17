@@ -11,6 +11,7 @@ from .bounds import bound_condition
 from .chips import FilterChip, filter_chips
 from .config import TableConfig
 from .counts import ColumnCounts
+from .dtypes import UNSIGNED_TYPES
 from .histograms import ColumnHistogram, mark_histograms
 from .pagination import Page, paginate
 from .state import TableState
@@ -201,17 +202,6 @@ def absolute_sortable(config: TableConfig, schema: Mapping[str, pl.DataType]) ->
         for name, column in config.sortable_columns.items()
         if not column.frame_order and schema[name].is_numeric()
     )
-
-
-# The unsigned type of each signed integer type, which holds the absolute value
-# of its smallest value (``-128`` of ``pl.Int8`` is ``128`` of ``pl.UInt8``).
-UNSIGNED_TYPES: dict[type[pl.DataType], type[pl.DataType]] = {
-    pl.Int8: pl.UInt8,
-    pl.Int16: pl.UInt16,
-    pl.Int32: pl.UInt32,
-    pl.Int64: pl.UInt64,
-    pl.Int128: pl.UInt128,
-}
 
 
 def absolute_key(name: str, dtype: pl.DataType) -> pl.Expr:

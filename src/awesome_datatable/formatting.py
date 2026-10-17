@@ -6,31 +6,7 @@ from datetime import datetime
 
 import polars as pl
 
-# Short names of the polars types without parameters, as polars prints them
-# over a frame's columns.
-SHORT_TYPE_NAMES: dict[type[pl.DataType], str] = {
-    pl.String: "str",
-    pl.Categorical: "cat",
-    pl.Enum: "enum",
-    pl.Boolean: "bool",
-    pl.Int8: "i8",
-    pl.Int16: "i16",
-    pl.Int32: "i32",
-    pl.Int64: "i64",
-    pl.Int128: "i128",
-    pl.UInt8: "u8",
-    pl.UInt16: "u16",
-    pl.UInt32: "u32",
-    pl.UInt64: "u64",
-    pl.UInt128: "u128",
-    pl.Float32: "f32",
-    pl.Float64: "f64",
-    pl.Date: "date",
-    pl.Time: "time",
-    pl.Binary: "binary",
-    pl.Null: "null",
-    pl.Object: "object",
-}
+from .dtypes import SHORT_TYPE_NAMES
 
 
 def format_value(value: object) -> str:
