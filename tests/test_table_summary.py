@@ -13,6 +13,7 @@ from awesome_datatable import (
     parse_state,
     summarize_table,
 )
+from awesome_datatable.counts import counts_by_value, value_counts
 from awesome_datatable.histograms import (
     column_histograms,
     count_histograms,
@@ -81,3 +82,12 @@ def test_apply_state_pages_by_the_chosen_page_size(
 
     assert (default.page_size, default.page.count, len(default.rows)) == (2, 2, 2)
     assert (chosen.page_size, chosen.page.count, len(chosen.rows)) == (3, 2, 3)
+
+
+def test_value_counts_count_the_non_null_values_as_text() -> None:
+    """``counts_by_value`` reads back the rows of each value from ``value_counts``."""
+    frame = pl.DataFrame({"n": [1, 2, 1, None]})
+
+    pairs = frame.select(value_counts("n")).item().to_list()
+
+    assert counts_by_value(pairs) == {"1": 2, "2": 1}
