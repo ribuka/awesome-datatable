@@ -7,6 +7,65 @@
   const REFRESH_EVENT = "dt-refresh";
   const SELECTION_EVENT = "datatable:selection-change";
 
+  // Every handler of this file is registered by event type in `handlers`
+  // (with `listen`, `on`, or `onTarget`), and one listener on the document
+  // per type runs that type's handlers in the order they were registered.
+  // A handler that throws is reported and does not stop the others.
+  const handlers = new Map();
+  // Toggle events do not bubble, so their listeners capture.
+  const CAPTURED_EVENTS = new Set(["toggle", "beforetoggle"]);
+
+  function listen(type, handler) {
+    if (!handlers.has(type)) {
+      handlers.set(type, []);
+      document.addEventListener(
+        type,
+        (event) => {
+          for (const registered of handlers.get(type)) {
+            try {
+              registered(event);
+            } catch (error) {
+              reportError(error);
+            }
+          }
+        },
+        CAPTURED_EVENTS.has(type),
+      );
+    }
+    handlers.get(type).push(handler);
+  }
+
+  // Runs `handler(event, element, root)` for events of the `types` whose
+  // target is, or is inside, an `element` matching `selector` in a table
+  // (`root`, its container).
+  function on(types, selector, handler) {
+    for (const type of [types].flat()) {
+      listen(type, (event) => {
+        const element = event.target.closest?.(selector);
+        const root = element && tableOf(element);
+        if (root) {
+          handler(event, element, root);
+        }
+      });
+    }
+  }
+
+  // Runs `handler(event, element)` for events of `type` whose element
+  // (`elementOf`: by default the target) itself matches `selector`.
+  function onTarget(type, selector, handler, elementOf = (event) => event.target) {
+    listen(type, (event) => {
+      const element = elementOf(event);
+      if (element?.matches?.(selector)) {
+        handler(event, element);
+      }
+    });
+  }
+
+  // The element of an htmx request event (`htmx:configRequest` and the
+  // others), and the target of an htmx swap event.
+  const requestElement = (event) => event.detail.elt;
+  const swapTarget = (event) => event.detail.target ?? event.target;
+
   // The selection of a selectable table over all pages and filters lives as
   // a JSON array in its hidden input (`data-dt-selection` names its id),
   // outside the reloaded fragment.
@@ -142,20 +201,18 @@
 
   // The header checkbox selects or clears every row matching the filters,
   // shown on this page or not.
-  document.addEventListener("change", (event) => {
-    const root = tableOf(event.target);
-    if (root?.dataset.dtSelection && event.target.matches("[data-dt-check-all]")) {
-      changeSelection(root, matchingKeys(root), event.target.checked);
+  on("change", "[data-dt-check-all]", (event, box, root) => {
+    if (root.dataset.dtSelection) {
+      changeSelection(root, matchingKeys(root), box.checked);
     }
   });
 
   // A click anywhere in the header checkbox's cell toggles the checkbox,
   // unless it is disabled; a click on the checkbox itself toggles it once,
   // by the browser.
-  document.addEventListener("click", (event) => {
-    const cell = event.target.closest?.(".dt-table thead th.dt-check");
-    const box = cell?.querySelector("[data-dt-check-all]");
-    if (box && event.target !== box && !box.disabled && tableOf(cell)) {
+  on("click", ".dt-table thead th.dt-check", (event, cell) => {
+    const box = cell.querySelector("[data-dt-check-all]");
+    if (box && event.target !== box && !box.disabled) {
       box.click();
     }
   });
@@ -190,10 +247,11 @@
   // Elements of a row that handle their own clicks.
   const INTERACTIVE = "a, button, input, select, textarea, label, summary, [contenteditable], [tabindex]";
 
-  function selectableRow(target) {
-    const row = target.closest?.("tbody tr[data-dt-key]");
-    const root = row && tableOf(row);
-    return root?.dataset.dtSelection ? { root, row, box: row.querySelector("[data-dt-row-check]") } : null;
+  const ROW = "tbody tr[data-dt-key]";
+
+  // Returns the checkbox of a row of a selectable table, or null.
+  function rowCheck(root, row) {
+    return root.dataset.dtSelection ? row.querySelector("[data-dt-row-check]") : null;
   }
 
   // A row checkbox, or a click anywhere else on a row, selects or clears
@@ -202,12 +260,11 @@
   // text, or a row whose checkbox is disabled (a locked table, or an
   // unselected row at the limit) changes nothing. The checkbox has already
   // toggled itself when its click arrives.
-  document.addEventListener("click", (event) => {
-    const found = selectableRow(event.target);
-    if (!found?.box) {
+  on("click", ROW, (event, row, root) => {
+    const box = rowCheck(root, row);
+    if (!box) {
       return;
     }
-    const { root, row, box } = found;
     if (event.target === box) {
       clickRow(root, row, box.checked, event.shiftKey);
       return;
@@ -222,17 +279,15 @@
   });
 
   // Shift + click would otherwise select the text between the two clicks.
-  document.addEventListener("mousedown", (event) => {
-    if (event.shiftKey && selectableRow(event.target)?.box) {
+  on("mousedown", ROW, (event, row, root) => {
+    if (event.shiftKey && rowCheck(root, row)) {
       event.preventDefault();
     }
   });
 
   // Clear empties the selection over every page and filter.
-  document.addEventListener("click", (event) => {
-    const clear = event.target.closest?.("[data-dt-clear]");
-    const root = clear && tableOf(clear);
-    if (root?.dataset.dtSelection) {
+  on("click", "[data-dt-clear]", (event, clear, root) => {
+    if (root.dataset.dtSelection) {
       changeSelection(root, [...selectedKeys(root)], false);
     }
   });
@@ -240,9 +295,8 @@
   // A page that sets the selection input itself, such as by putting a form
   // back to its shown conditions, dispatches `datatable:selection-sync` on
   // the container: the checkboxes show the selection again.
-  document.addEventListener("datatable:selection-sync", (event) => {
-    const root = event.target;
-    if (root.matches?.("[data-datatable]") && root.dataset.dtSelection && root.querySelector(".dt-table")) {
+  onTarget("datatable:selection-sync", "[data-datatable]", (event, root) => {
+    if (root.dataset.dtSelection && root.querySelector(".dt-table")) {
       syncChecks(root);
     }
   });
@@ -432,10 +486,8 @@
     }
   }
 
-  document.addEventListener("click", (event) => {
-    const button = event.target.closest?.("[data-dt-export]");
-    const root = button && tableOf(button);
-    if (root?.dataset.dtExportUrl) {
+  on("click", "[data-dt-export]", (event, button, root) => {
+    if (root.dataset.dtExportUrl) {
       exportRows(root, button);
     }
   });
@@ -462,11 +514,7 @@
   // loaded again from the first page with the applied query. The column
   // menus are drawn again too, since their values and counts follow the
   // rows.
-  document.addEventListener("datatable:refresh", (event) => {
-    const root = event.target;
-    if (!root.matches?.("[data-datatable]")) {
-      return;
-    }
+  onTarget("datatable:refresh", "[data-datatable]", (event, root) => {
     root.setAttribute("aria-busy", "true");
     clearTimeout(queryTimers.get(root));
     const page = queryControl(root, "page");
@@ -480,9 +528,8 @@
   // after a pause. The filters of the column menus wait for Apply (below).
   const TYPED_QUERY = "input[data-dt-query]:not([type='checkbox'], [type='hidden'])";
 
-  document.addEventListener("input", (event) => {
-    const root = tableOf(event.target);
-    if (!root || !event.target.matches(TYPED_QUERY) || event.target.closest("[data-dt-menu]")) {
+  on("input", TYPED_QUERY, (event, input, root) => {
+    if (input.closest("[data-dt-menu]")) {
       return;
     }
     clearTimeout(queryTimers.get(root));
@@ -516,9 +563,9 @@
     reload(tableOf(input), { page: String(number) });
   }
 
-  document.addEventListener("change", (event) => {
-    if (event.target.matches("[data-dt-page-input]") && event.target.isConnected && tableOf(event.target)) {
-      goToTypedPage(event.target, false);
+  on("change", "[data-dt-page-input]", (event, input) => {
+    if (input.isConnected) {
+      goToTypedPage(input, false);
     }
   });
 
@@ -527,19 +574,15 @@
   // shows that row at the top of the table (`keptRow` of the reload, used
   // by swapParts), so the view stays where it was. A failed or replaced
   // request leaves no position for the next reload.
-  document.addEventListener("change", (event) => {
-    const root = tableOf(event.target);
-    if (!root || !event.target.matches("[data-dt-page-size]")) {
-      return;
-    }
+  on("change", "[data-dt-page-size]", (event, select, root) => {
     const start = Number(root.querySelector("[data-dt-page-range]")?.dataset.dtStart) || 1;
-    reload(root, { page: String(Math.floor((start - 1) / Number(event.target.value)) + 1) }, { keptRow: start });
+    reload(root, { page: String(Math.floor((start - 1) / Number(select.value)) + 1) }, { keptRow: start });
   });
 
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && event.target.matches?.("[data-dt-page-input]") && tableOf(event.target)) {
+  on("keydown", "[data-dt-page-input]", (event, input) => {
+    if (event.key === "Enter") {
       event.preventDefault();
-      goToTypedPage(event.target, true);
+      goToTypedPage(input, true);
     }
   });
 
@@ -584,11 +627,10 @@
 
   // A button of a null filter chooses its value, as a draft of the column
   // menu until Apply.
-  document.addEventListener("click", (event) => {
-    const button = event.target.closest?.("[data-dt-null]");
-    const input = button?.closest(".dt-nulls")?.querySelector("[data-dt-null-value]");
-    const menu = button?.closest("[data-dt-menu]");
-    if (!input || !menu || !tableOf(menu)) {
+  on("click", "[data-dt-null]", (event, button) => {
+    const input = button.closest(".dt-nulls")?.querySelector("[data-dt-null-value]");
+    const menu = button.closest("[data-dt-menu]");
+    if (!input || !menu) {
       return;
     }
     input.value = button.dataset.dtNull;
@@ -601,12 +643,7 @@
   // page. A column menu left open with a draft (the chip reached with Tab)
   // is closed first, which drops the draft, so the chip clears the applied
   // filters.
-  document.addEventListener("click", (event) => {
-    const remove = event.target.closest?.("[data-dt-remove-filter]");
-    const root = remove && tableOf(remove);
-    if (!root) {
-      return;
-    }
+  on("click", "[data-dt-remove-filter]", (event, remove, root) => {
     const draft = drafts.get(root);
     const open = draft && document.getElementById(draft.menu);
     if (open) {
@@ -723,15 +760,12 @@
     }
   }
 
-  document.addEventListener("change", (event) => {
-    const root = tableOf(event.target);
-    if (root && event.target.matches("[data-dt-show-column]")) {
-      syncColumns(root, false);
-      storeHiddenColumns(
-        root,
-        [...root.querySelectorAll("[data-dt-show-column]")].filter((box) => !box.checked).map((box) => box.dataset.dtShowColumn),
-      );
-    }
+  on("change", "[data-dt-show-column]", (event, box, root) => {
+    syncColumns(root, false);
+    storeHiddenColumns(
+      root,
+      [...root.querySelectorAll("[data-dt-show-column]")].filter((shown) => !shown.checked).map((shown) => shown.dataset.dtShowColumn),
+    );
   });
 
   // The "Pin columns" toggle (`[data-dt-pin-toggle]`) pins the first column
@@ -750,16 +784,12 @@
 
   // Switching the toggle shows the choice on every table in the page that
   // shares it (`data-dt-pin-preference`), such as the table under a dialog.
-  document.addEventListener("click", (event) => {
-    const toggle = event.target.closest?.("[data-dt-pin-toggle]");
-    const root = toggle && tableOf(toggle);
-    if (root) {
-      storePreference(root, "pinned-columns", !root.hasAttribute("data-dt-pinned"));
-      const key = preferenceKey(root, "pinned-columns");
-      for (const table of document.querySelectorAll("[data-datatable]")) {
-        if (preferenceKey(table, "pinned-columns") === key) {
-          syncPinned(table);
-        }
+  on("click", "[data-dt-pin-toggle]", (event, toggle, root) => {
+    storePreference(root, "pinned-columns", !root.hasAttribute("data-dt-pinned"));
+    const key = preferenceKey(root, "pinned-columns");
+    for (const table of document.querySelectorAll("[data-datatable]")) {
+      if (preferenceKey(table, "pinned-columns") === key) {
+        syncPinned(table);
       }
     }
   });
@@ -869,10 +899,8 @@
   // A drag follows the pointer (captured by the handle) from the width the
   // column had, live, and remembers the width where it ends. Taking the
   // pointer down cancels the text selection and the clicks under it.
-  document.addEventListener("pointerdown", (event) => {
-    const handle = event.target.closest?.("[data-dt-resize]");
-    const root = handle && tableOf(handle);
-    if (!root || event.button !== 0) {
+  on("pointerdown", "[data-dt-resize]", (event, handle, root) => {
+    if (event.button !== 0) {
       return;
     }
     event.preventDefault();
@@ -901,20 +929,14 @@
     handle.addEventListener("lostpointercapture", end);
   });
 
-  document.addEventListener("dblclick", (event) => {
-    const handle = event.target.closest?.("[data-dt-resize]");
-    const root = handle && tableOf(handle);
-    if (root) {
-      event.preventDefault();
-      fitWidth(root, handle);
-    }
+  on("dblclick", "[data-dt-resize]", (event, handle, root) => {
+    event.preventDefault();
+    fitWidth(root, handle);
   });
 
-  document.addEventListener("keydown", (event) => {
-    const handle = event.target.closest?.("[data-dt-resize]");
-    const root = handle && tableOf(handle);
+  on("keydown", "[data-dt-resize]", (event, handle, root) => {
     const step = { ArrowLeft: -WIDTH_STEP_PX, ArrowRight: WIDTH_STEP_PX }[event.key];
-    if (!root || step === undefined) {
+    if (step === undefined) {
       return;
     }
     event.preventDefault();
@@ -923,21 +945,16 @@
     setWidth(root, handle.dataset.dtResize, Math.max(minimumWidth(header), width), true);
   });
 
-  document.addEventListener("click", (event) => {
-    const reset = event.target.closest?.("[data-dt-reset-widths]");
-    const root = reset && tableOf(reset);
-    if (root) {
-      storePreference(root, "column-widths", {});
-      syncWidths(root);
-    }
+  on("click", "[data-dt-reset-widths]", (event, reset, root) => {
+    storePreference(root, "column-widths", {});
+    syncWidths(root);
   });
 
   // A value (or a column name) cut short by its column shows whole as its
   // tooltip while the pointer is on it. A cell keeps the tooltip the
   // application gave it (`title_column`).
-  document.addEventListener("mouseover", (event) => {
-    const cell = event.target.closest?.(".dt-table td, .dt-table .dt-label");
-    if (!cell || !tableOf(cell) || (cell.hasAttribute("title") && !("dtAutoTitle" in cell.dataset))) {
+  on("mouseover", ".dt-table td, .dt-table .dt-label", (event, cell) => {
+    if (cell.hasAttribute("title") && !("dtAutoTitle" in cell.dataset)) {
       return;
     }
     if (cell.scrollWidth > cell.clientWidth) {
@@ -985,21 +1002,15 @@
     return document.querySelectorAll("[data-dt-menu]:popover-open");
   }
 
-  // Toggle events do not bubble, so listen while capturing.
-  document.addEventListener(
-    "toggle",
-    (event) => {
-      if (!event.target.matches?.("[data-dt-menu]")) {
-        return;
-      }
-      if (event.newState === "open") {
-        placeMenu(event.target);
-      } else {
-        delete event.target.dataset.dtPlaced;
-      }
-    },
-    true,
-  );
+  // The menu itself is the target: a toggle of a <details> in a menu is not
+  // the menu's.
+  onTarget("toggle", "[data-dt-menu]", (event, menu) => {
+    if (event.newState === "open") {
+      placeMenu(menu);
+    } else {
+      delete menu.dataset.dtPlaced;
+    }
+  });
 
   // An open menu follows its column name when the page or the table scrolls.
   for (const type of ["scroll", "resize"]) {
@@ -1044,7 +1055,7 @@
   // Escape in an open menu closes it and returns the focus to its column
   // name, also for a menu reopened after a reload (which has no invoker to
   // return to). Cancelling the key keeps a surrounding <dialog> open.
-  document.addEventListener("keydown", (event) => {
+  listen("keydown", (event) => {
     if (event.key !== "Escape" || event.defaultPrevented) {
       return;
     }
@@ -1080,44 +1091,30 @@
   // values while the menu's Abs is checked, and closes the menu; "Copy
   // column name" copies it and closes the menu; the page buttons move
   // between pages.
-  document.addEventListener("click", (event) => {
-    const root = tableOf(event.target);
-    if (!root) {
-      return;
-    }
-    const sort = event.target.closest("[data-dt-sort]");
-    if (sort) {
-      closeMenu(sort);
-      showSort(root, sort.dataset.dtSort, sort.dataset.dtOrder);
-      reload(root, {
-        sort: sort.dataset.dtSort,
-        order: sort.dataset.dtOrder,
-        absolute: absoluteOf(sort),
-        page: "1",
-      });
-      return;
-    }
-    const copy = event.target.closest("[data-dt-copy]");
-    if (copy) {
-      copyText(copy.dataset.dtCopy, copy.closest("[data-dt-menu]"));
-      closeMenu(copy);
-      return;
-    }
-    const page = event.target.closest("[data-dt-page]");
-    if (page) {
-      reload(root, { page: page.dataset.dtPage });
-    }
+  on("click", "[data-dt-sort]", (event, sort, root) => {
+    closeMenu(sort);
+    showSort(root, sort.dataset.dtSort, sort.dataset.dtOrder);
+    reload(root, {
+      sort: sort.dataset.dtSort,
+      order: sort.dataset.dtOrder,
+      absolute: absoluteOf(sort),
+      page: "1",
+    });
+  });
+
+  on("click", "[data-dt-copy]", (event, copy) => {
+    copyText(copy.dataset.dtCopy, copy.closest("[data-dt-menu]"));
+    closeMenu(copy);
+  });
+
+  on("click", "[data-dt-page]", (event, page, root) => {
+    reload(root, { page: page.dataset.dtPage });
   });
 
   // The Abs checkbox of the sorted column sorts it again in the same
   // direction, by the absolute values or not, and closes the menu. On
   // another column it waits for Asc or Desc.
-  document.addEventListener("change", (event) => {
-    const root = tableOf(event.target);
-    const box = event.target;
-    if (!root || !box.matches("[data-dt-sort-absolute]")) {
-      return;
-    }
+  on("change", "[data-dt-sort-absolute]", (event, box, root) => {
     const sort = queryControl(root, "sort");
     if (sort?.value === box.dataset.dtSortAbsolute) {
       closeMenu(box);
@@ -1138,7 +1135,7 @@
   const drafts = new WeakMap();
 
   function hasFilters(menu) {
-    return Boolean(menu.matches?.("[data-dt-menu]") && menu.querySelector("[data-dt-apply]"));
+    return menu.querySelector("[data-dt-apply]") !== null;
   }
 
   // Returns the open draft of `menu`, or undefined when it has none.
@@ -1224,50 +1221,54 @@
   // closes it, so the applied filters are back before that click lands.
   // A menu opening while another one of the table holds a draft (opened
   // from the keyboard, the new menu's event comes before the other closes)
-  // drops that draft first. Toggle events do not bubble, so listen while
-  // capturing. A menu taken out of the page by a reload closes without the
-  // event and keeps its draft for the reopening.
-  document.addEventListener(
-    "beforetoggle",
-    (event) => {
-      const menu = event.target;
-      if (!hasFilters(menu)) {
-        return;
-      }
-      const root = tableOf(menu);
-      if (event.newState === "open") {
-        if (!draftOf(menu)) {
-          discardDraft(root);
-          drafts.set(root, { menu: menu.id, applied: fieldsOf(queryControls(menu)) });
-        }
-      } else if (draftOf(menu)) {
-        discardDraft(root);
-      }
-      syncDraft(menu);
-    },
-    true,
-  );
-
-  for (const type of ["input", "change"]) {
-    document.addEventListener(type, (event) => {
-      const menu = event.target.closest?.("[data-dt-menu]");
-      if (menu && event.target.matches("[data-dt-query]") && hasFilters(menu) && tableOf(menu)) {
-        syncDraft(menu);
-      }
-    });
-  }
-
-  document.addEventListener("click", (event) => {
-    const button = event.target.closest?.("[data-dt-apply], [data-dt-cancel], [data-dt-clear-filter]");
-    const menu = button?.closest("[data-dt-menu]");
-    if (!menu || !tableOf(menu)) {
+  // drops that draft first. A menu taken out of the page by a reload closes
+  // without the event and keeps its draft for the reopening.
+  onTarget("beforetoggle", "[data-dt-menu]", (event, menu) => {
+    if (!hasFilters(menu)) {
       return;
     }
-    if (button.matches("[data-dt-apply]")) {
+    const root = tableOf(menu);
+    if (event.newState === "open") {
+      if (!draftOf(menu)) {
+        discardDraft(root);
+        drafts.set(root, { menu: menu.id, applied: fieldsOf(queryControls(menu)) });
+      }
+    } else if (draftOf(menu)) {
+      discardDraft(root);
+    }
+    syncDraft(menu);
+  });
+
+  // Returns the column menu with filters that holds `element`, or null.
+  function filterMenuOf(element) {
+    const menu = element.closest("[data-dt-menu]");
+    return menu && hasFilters(menu) ? menu : null;
+  }
+
+  on(["input", "change"], "[data-dt-query]", (event, control) => {
+    const menu = filterMenuOf(control);
+    if (menu) {
+      syncDraft(menu);
+    }
+  });
+
+  on("click", "[data-dt-apply]", (event, button) => {
+    const menu = button.closest("[data-dt-menu]");
+    if (menu) {
       applyDraft(menu);
-    } else if (button.matches("[data-dt-clear-filter]")) {
+    }
+  });
+
+  on("click", "[data-dt-clear-filter]", (event, button) => {
+    const menu = button.closest("[data-dt-menu]");
+    if (menu) {
       clearFilters(menu);
-    } else {
+    }
+  });
+
+  on("click", "[data-dt-cancel]", (event, button) => {
+    const menu = button.closest("[data-dt-menu]");
+    if (menu) {
       closeMenu(menu);
       menuButton(menu)?.focus();
     }
@@ -1276,9 +1277,9 @@
   // Enter in a search or a bound of a column menu is Apply (nothing while
   // the draft equals the applied filters). Enter that ends an IME
   // composition only confirms the text.
-  document.addEventListener("keydown", (event) => {
-    const menu = event.target.closest?.("[data-dt-menu]");
-    if (event.key !== "Enter" || event.isComposing || !menu || !event.target.matches(TYPED_QUERY) || !hasFilters(menu)) {
+  on("keydown", TYPED_QUERY, (event, input) => {
+    const menu = filterMenuOf(input);
+    if (event.key !== "Enter" || event.isComposing || !menu) {
       return;
     }
     event.preventDefault();
@@ -1294,11 +1295,7 @@
   // A reload of the table's own (`dt-reload`) asks only for the parts that
   // swapParts swaps (`<id>.parts=1`), so the toolbar and the column menus
   // are neither drawn nor sent again.
-  document.addEventListener("htmx:configRequest", (event) => {
-    const root = event.detail.elt;
-    if (!root?.matches?.("[data-datatable]")) {
-      return;
-    }
+  onTarget("htmx:configRequest", "[data-datatable]", (event, root) => {
     // A whole load asks for the kept query instead of the applied one: the
     // one initTable set, or, for a first fragment, the kept one.
     const reloaded = event.detail.triggeringEvent?.type === RELOAD_EVENT;
@@ -1316,16 +1313,14 @@
     if (reloaded) {
       event.detail.formData.append(parameterName(root, "parts"), "1");
     }
-  });
+  }, requestElement);
 
   // While a table reloads (`aria-busy` on the container, set already by
   // reload) it shows that it is busy: the rows fade and a spinner turns
   // (datatable.css), and assistive technology is told.
-  document.addEventListener("htmx:beforeRequest", (event) => {
-    if (event.detail.elt.matches?.("[data-datatable]")) {
-      event.detail.elt.setAttribute("aria-busy", "true");
-    }
-  });
+  onTarget("htmx:beforeRequest", "[data-datatable]", (event, root) => {
+    root.setAttribute("aria-busy", "true");
+  }, requestElement);
 
   // Loads the whole fragment again (`dt-refresh`) after the current request
   // ends, so that hx-sync does not drop the new one.
@@ -1339,11 +1334,7 @@
   // (forgetFailedPage); if it was loading a kept query (its response is not
   // swapped in), that query is forgotten too, and the table loads again
   // with its applied query.
-  document.addEventListener("htmx:afterRequest", (event) => {
-    const root = event.detail.elt;
-    if (!root.matches?.("[data-datatable]")) {
-      return;
-    }
+  onTarget("htmx:afterRequest", "[data-datatable]", (event, root) => {
     root.removeAttribute("aria-busy");
     if (event.detail.successful) {
       if (root.querySelector(".dt-table")) {
@@ -1357,7 +1348,7 @@
       forgetQuery(root);
       refreshLater(root);
     }
-  });
+  }, requestElement);
 
   // The focusable elements of a swapped part, in their order.
   function focusables(part) {
@@ -1469,9 +1460,8 @@
   // loaded instead (refreshLater). Other reloads (a trigger of the page,
   // such as a catalog update) swap the whole fragment with htmx, and the
   // open menu is noted first.
-  document.addEventListener("htmx:beforeSwap", (event) => {
-    const root = event.detail.target ?? event.target;
-    if (!root?.matches?.("[data-datatable]") || !event.detail.shouldSwap) {
+  onTarget("htmx:beforeSwap", "[data-datatable]", (event, root) => {
+    if (!event.detail.shouldSwap) {
       return;
     }
     const triggering = event.detail.requestConfig?.triggeringEvent;
@@ -1483,7 +1473,7 @@
     if (!swapParts(root, event.detail.serverResponse, triggering.detail?.keptRow)) {
       refreshLater(root);
     }
-  });
+  }, swapTarget);
 
   function reopenMenu(root) {
     const noted = reopenedMenus.get(root);
@@ -1526,23 +1516,20 @@
   // click outside falls between the swap and the reopening, and hide the
   // hidden columns and show the pinned state and the column widths before
   // the new rows are drawn.
-  document.addEventListener("htmx:afterSwap", (event) => {
-    const root = event.detail.target ?? event.target;
-    if (root?.matches?.("[data-datatable]")) {
-      // The typed filters and the search box are kept from the table before
-      // the swap (hx-preserve), and the response gives the typed bounds no
-      // value: after a kept query they show it.
-      const kept = restoringQueries.get(root);
-      restoringQueries.delete(root);
-      if (kept) {
-        setControls(root.querySelectorAll("[data-dt-query][hx-preserve]"), kept);
-      }
-      syncColumns(root, true);
-      syncPinned(root);
-      syncWidths(root);
-      reopenMenu(root);
+  onTarget("htmx:afterSwap", "[data-datatable]", (event, root) => {
+    // The typed filters and the search box are kept from the table before
+    // the swap (hx-preserve), and the response gives the typed bounds no
+    // value: after a kept query they show it.
+    const kept = restoringQueries.get(root);
+    restoringQueries.delete(root);
+    if (kept) {
+      setControls(root.querySelectorAll("[data-dt-query][hx-preserve]"), kept);
     }
-  });
+    syncColumns(root, true);
+    syncPinned(root);
+    syncWidths(root);
+    reopenMenu(root);
+  }, swapTarget);
 
   // A table drawn with the page (the `container` macro called with its
   // first fragment) shows the remembered hidden columns, pinning, and column
@@ -1596,25 +1583,21 @@
     element.querySelectorAll?.("[data-datatable]").forEach(initTable);
   }
 
-  document.addEventListener("htmx:load", (event) => initTables(event.target));
+  listen("htmx:load", (event) => initTables(event.target));
   // htmx processes the page on DOMContentLoaded too, from a listener added
   // before this one, so the tables answer their triggers by now.
-  document.addEventListener("DOMContentLoaded", () => document.querySelectorAll("[data-datatable]").forEach(restoreQuery));
+  listen("DOMContentLoaded", () => document.querySelectorAll("[data-datatable]").forEach(restoreQuery));
 
   // Settling resets the attributes of elements kept by id to those of the
   // response, which drops the placement of a reopened menu; place it again
   // in the same task, before it is drawn. A menu closed meanwhile stays
   // closed.
-  document.addEventListener("htmx:afterSettle", (event) => {
-    const root = event.detail.elt;
-    if (!root.matches?.("[data-datatable]")) {
-      return;
-    }
+  onTarget("htmx:afterSettle", "[data-datatable]", (event, root) => {
     for (const menu of root.querySelectorAll("[data-dt-menu]:popover-open")) {
       placeMenu(menu);
     }
     if (root.dataset.dtSelection) {
       syncChecks(root);
     }
-  });
+  }, requestElement);
 })();
