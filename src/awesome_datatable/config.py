@@ -149,7 +149,7 @@ class TableConfig:
         table's own ``table_id``.
     histograms : bool, default False
         Whether each header shows the distribution of its column over every
-        row of the frame (``column_histograms``): a histogram of a number,
+        row of the frame (``count_histograms``): a histogram of a number,
         date, or datetime column, or the most frequent values of a
         categorical, enum, or boolean column. Turn it off when every row is
         not a meaningful base, such as a table of a few chosen rows.
