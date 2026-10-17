@@ -34,6 +34,19 @@ FILTER_PREFIXES = {
     NULL_PREFIX: ("text", "choice", "number", "datetime"),
 }
 
+# The parameters that ``parse_state`` reads besides the column filters; a
+# table accepts ``page_size`` and ``search`` only with ``TableConfig.page_sizes``
+# and ``TableConfig.search`` (``_state_parameters``).
+STATE_PARAMETERS = (
+    SORT_PARAMETER,
+    ORDER_PARAMETER,
+    ABSOLUTE_PARAMETER,
+    PAGE_PARAMETER,
+    PAGE_SIZE_PARAMETER,
+    SEARCH_PARAMETER,
+    PARTS_PARAMETER,
+)
+
 # How a null filter treats null values: keep only them, or drop them.
 type NullFilter = Literal["is_null", "is_not_null"]
 NULL_FILTERS: tuple[NullFilter, ...] = get_args(NullFilter.__value__)
@@ -157,21 +170,35 @@ class _Filters(NamedTuple):
         Searches of ``"text"`` and ``"choice"`` columns.
     equals : dict[str, tuple[str, ...]]
         Chosen values of ``"choice"`` columns.
-    lower : dict[str, Bound]
-        Lower bounds of ``"number"`` and ``"datetime"`` columns; ``None``
-        for a blank parameter.
-    upper : dict[str, Bound]
-        Upper bounds of ``"number"`` and ``"datetime"`` columns; ``None``
-        for a blank parameter.
+    ranges : dict[str, tuple[Bound, Bound]]
+        ``(lower, upper)`` bounds of ``"number"`` and ``"datetime"``
+        columns with at least one bound.
     nulls : dict[str, NullFilter]
         Null filters of every filter kind.
     """
 
     text: dict[str, str]
     equals: dict[str, tuple[str, ...]]
-    lower: dict[str, Bound]
-    upper: dict[str, Bound]
+    ranges: dict[str, tuple[Bound, Bound]]
     nulls: dict[str, NullFilter]
+
+
+def _state_parameters(config: TableConfig) -> frozenset[str]:
+    """Return the parameters of a table that are not column filters.
+
+    Parameters
+    ----------
+    config : TableConfig
+        Table settings.
+
+    Returns
+    -------
+    frozenset[str]
+        Names of ``STATE_PARAMETERS`` that the table accepts, without
+        ``TableConfig.prefix``.
+    """
+    optional = {PAGE_SIZE_PARAMETER: bool(config.page_sizes), SEARCH_PARAMETER: config.search}
+    return frozenset(name for name in STATE_PARAMETERS if optional.get(name, True))
 
 
 def _parse_filters(
@@ -192,8 +219,8 @@ def _parse_filters(
     Returns
     -------
     _Filters
-        Parsed filters; blank values are left out, except blank bounds,
-        which stay as ``None``.
+        Parsed filters; blank values are left out, and a blank bound leaves
+        its side open (``None``).
 
     Raises
     ------
@@ -205,17 +232,11 @@ def _parse_filters(
     filtered = config.filtered_columns
     text: dict[str, str] = {}
     equals: dict[str, tuple[str, ...]] = {}
-    lower: dict[str, Bound] = {}
-    upper: dict[str, Bound] = {}
+    ranges: dict[str, tuple[Bound, Bound]] = {}
     nulls: dict[str, NullFilter] = {}
+    skipped = _state_parameters(config)
     for key, value in values.items():
-        if key in (
-            SORT_PARAMETER, ORDER_PARAMETER, ABSOLUTE_PARAMETER, PAGE_PARAMETER, PARTS_PARAMETER
-        ):
-            continue
-        if key == PAGE_SIZE_PARAMETER and config.page_sizes:
-            continue
-        if key == SEARCH_PARAMETER and config.search:
+        if key in skipped:
             continue
         prefix = next((prefix for prefix in FILTER_PREFIXES if key.startswith(prefix)), None)
         if prefix is None:
@@ -241,9 +262,11 @@ def _parse_filters(
                 nulls[name] = null_filter
         else:
             bound = _parse_bound(value, column, config.parameter(key))
-            (lower if prefix == MIN_PREFIX else upper)[name] = bound
+            lower, upper = ranges.get(name, (None, None))
+            ranges[name] = (bound, upper) if prefix == MIN_PREFIX else (lower, bound)
 
-    return _Filters(text=text, equals=equals, lower=lower, upper=upper, nulls=nulls)
+    ranges = {name: bounds for name, bounds in ranges.items() if bounds != (None, None)}
+    return _Filters(text=text, equals=equals, ranges=ranges, nulls=nulls)
 
 
 def parse_state(parameters: Parameters, config: TableConfig) -> TableState:
@@ -280,7 +303,9 @@ def parse_state(parameters: Parameters, config: TableConfig) -> TableState:
     ------
     ValueError
         If a parameter of the table is unknown (``search`` of a table
-        without the search box too), names a column without that filter, or has an unparsable value, sort column, order, absolute sort, page, page size, or parts.
+        without the search box too), names a column without that filter, or
+        has an unparsable value, sort column, order, absolute sort, page,
+        page size, or parts.
     """
     every = {
         key.removeprefix(config.prefix): raw
@@ -303,11 +328,6 @@ def parse_state(parameters: Parameters, config: TableConfig) -> TableState:
         raise ValueError(f"invalid page size: {page_size!r}")
     parts = last_choice(every.get(PARTS_PARAMETER, ()), ("", "1"), "invalid parts")
 
-    ranges = {
-        name: (filters.lower.get(name), filters.upper.get(name))
-        for name in dict.fromkeys([*filters.lower, *filters.upper])
-        if filters.lower.get(name) is not None or filters.upper.get(name) is not None
-    }
     return TableState(
         sort_by=sort_by,
         descending=order == "desc",
@@ -318,6 +338,6 @@ def parse_state(parameters: Parameters, config: TableConfig) -> TableState:
         search=values.get(SEARCH_PARAMETER, "").strip(),
         text=filters.text,
         equals=filters.equals,
-        ranges=ranges,
+        ranges=filters.ranges,
         nulls=filters.nulls,
     )

@@ -67,6 +67,23 @@ def test_parse_state_keeps_every_choice_value(config: TableConfig) -> None:
     assert parse_state({"t.eq__group": ["", " "]}, config).equals == {}
 
 
+def test_parse_state_pairs_the_bounds_of_each_column(config: TableConfig) -> None:
+    """``min__`` and ``max__`` of a column make one range, and blank bounds leave it out."""
+    state = parse_state(
+        {
+            "t.max__count": ["9"],
+            "t.min__count": ["1", "2"],
+            "t.min__score": ["0.5"],
+            "t.min__when": [""],
+            "t.max__when": [" "],
+        },
+        config,
+    )
+
+    assert state.ranges == {"count": (2, 9), "score": (0.5, None)}
+    assert parse_state({"t.min__count": [""]}, config).ranges == {}
+
+
 @pytest.mark.parametrize("value", ["is_null", "is_not_null"])
 def test_parse_state_reads_a_null_filter_of_every_filter_kind(
     config: TableConfig, value: str
