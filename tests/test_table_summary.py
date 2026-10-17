@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 import polars as pl
+import pytest
 
 from awesome_datatable import (
     TableConfig,
@@ -32,6 +33,31 @@ def test_summary_holds_the_types_choices_counts_and_histograms(
     assert summary.counts.nulls["count"] == 1
     assert list(summary.histograms) == ["count", "score", "when"]
     assert all(b.in_filter for b in summary.histograms["count"].bins)
+
+
+@pytest.mark.parametrize(("histograms", "collects"), [(False, 1), (True, 3)])
+def test_summary_collects_the_frame_once_for_counts_and_choices(
+    frame: pl.DataFrame,
+    config: TableConfig,
+    monkeypatch: pytest.MonkeyPatch,
+    histograms: bool,
+    collects: int,
+) -> None:
+    """The choices come from the counts; histograms add their own two queries."""
+    config = replace(config, histograms=histograms)
+    calls: list[pl.LazyFrame] = []
+    collect = pl.LazyFrame.collect
+
+    def counted(self: pl.LazyFrame, *args: object, **kwargs: object) -> pl.DataFrame:
+        calls.append(self)
+        return collect(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(pl.LazyFrame, "collect", counted)
+
+    summary = summarize_table(frame.lazy(), config)
+
+    assert len(calls) == collects
+    assert summary.options == {"group": ["a", "b"]}
 
 
 def test_apply_state_takes_the_menus_from_a_given_summary(
