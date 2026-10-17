@@ -36,3 +36,9 @@ markers = [
     "e2e: browser tests of the data table in the demo app (run with `-m e2e`)",
     "table_config(**changes): TableConfig fields that the demo app's table of an E2E test replaces",
 ]
+
+[tool.ruff.lint]
+extend-select = ["I", "UP", "B", "D", "ANN"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
