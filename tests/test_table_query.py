@@ -26,6 +26,12 @@ from awesome_datatable.query import (
     sort_frame,
 )
 
+SELECTABLE = TableConfig(table_id="t", key="key", columns=(), url="/", selectable=True)
+"""The table that each test's own config replaces fields of."""
+
+VALUE_CONFIG = replace(SELECTABLE, columns=(ColumnConfig("key"), ColumnConfig("value", filter="number")))
+"""A selectable table with a number filter on ``value``."""
+
 
 def _keys(frame: pl.DataFrame, state: TableState, config: TableConfig) -> list[str]:
     """Return the keys of every row matching a state, in display order."""
@@ -90,13 +96,7 @@ def test_apply_state_filters_every_column_type(
 def test_text_filter_searches_words_as_plain_text(search: str, expected: list[str]) -> None:
     """A search's words match in any order and case and are not regular expressions."""
     frame = pl.DataFrame({"name": ["LotA_B01_run3", "lotb.b02(run3)", "axb"]})
-    config = TableConfig(
-        table_id="t",
-        key="name",
-        columns=(ColumnConfig("name", filter="text"),),
-        url="/",
-        selectable=True,
-    )
+    config = replace(SELECTABLE, key="name", columns=(ColumnConfig("name", filter="text"),))
 
     state = parse_state({"t.q__name": [search]}, config)
 
@@ -123,13 +123,7 @@ def test_choice_filter_searches_its_values(parameters: dict[str, list[str]], exp
         {"key": ["k1", "k2", "k3", "k4"], "lot": ["LotA_B01_run3", "lotb.b02(run3)", "LotC", None]},
         schema_overrides={"lot": pl.Categorical()},
     )
-    config = TableConfig(
-        table_id="t",
-        key="key",
-        columns=(ColumnConfig("key"), ColumnConfig("lot", filter="choice")),
-        url="/",
-        selectable=True,
-    )
+    config = replace(SELECTABLE, columns=(ColumnConfig("key"), ColumnConfig("lot", filter="choice")))
 
     state = parse_state(parameters, config)
 
@@ -177,9 +171,7 @@ def test_search_columns_are_the_shown_string_columns(
 def test_search_without_text_columns_matches_nothing() -> None:
     """A search finds no row in a table without text columns."""
     frame = pl.DataFrame({"n": [1, 2]})
-    config = TableConfig(
-        table_id="t", key="n", columns=(ColumnConfig("n"),), url="/", selectable=True, search=True
-    )
+    config = replace(SELECTABLE, key="n", columns=(ColumnConfig("n"),), search=True)
 
     assert _keys(frame, TableState(search="1"), config) == []
     assert _keys(frame, TableState(search=" "), config) == [str(1), str(2)]
@@ -244,11 +236,11 @@ def test_count_values_counts_choices_and_nulls_over_every_row(
 def test_count_values_keeps_column_names_apart_from_its_own() -> None:
     """Columns named like the count's fields are counted correctly."""
     frame = pl.DataFrame({"value": ["x", "x", None], "n": ["y", None, None]})
-    config = TableConfig(
-        table_id="t",
+    config = replace(
+        SELECTABLE,
         key="value",
         columns=(ColumnConfig("value", filter="choice"), ColumnConfig("n", filter="choice")),
-        url="/",
+        selectable=False,
     )
 
     counts = count_values(frame, config)
@@ -259,7 +251,7 @@ def test_count_values_keeps_column_names_apart_from_its_own() -> None:
 
 def test_count_values_without_filters_is_empty(frame: pl.DataFrame) -> None:
     """A table without filters counts nothing."""
-    config = TableConfig(table_id="t", key="key", columns=(ColumnConfig("key"),), url="/")
+    config = replace(SELECTABLE, columns=(ColumnConfig("key"),), selectable=False)
 
     assert count_values(frame, config) == ColumnCounts(values={}, nulls={})
 
@@ -321,9 +313,9 @@ def signed() -> pl.DataFrame:
 @pytest.fixture
 def signed_config() -> TableConfig:
     """Return a selectable table over every column of ``signed``."""
-    return TableConfig(
+    return replace(
+        SELECTABLE,
         table_id="s",
-        key="key",
         columns=(
             ColumnConfig("key", frame_order=True),
             ColumnConfig("r", filter="number"),
@@ -331,7 +323,6 @@ def signed_config() -> TableConfig:
             ColumnConfig("text", filter="text"),
         ),
         url="/table",
-        selectable=True,
     )
 
 
@@ -373,8 +364,8 @@ def test_absolute_sort_puts_the_smallest_integer_farthest_from_zero(
         {"key": ["k1", "k2", "k3", "k4"], "n": [-(2 ** (bits - 1)), -1, 2, None]},
         schema={"key": pl.String, "n": dtype},
     )
-    config = TableConfig(
-        table_id="s", key="key", columns=(ColumnConfig("key"), ColumnConfig("n")), url="/"
+    config = replace(
+        SELECTABLE, table_id="s", columns=(ColumnConfig("key"), ColumnConfig("n")), selectable=False
     )
     state = TableState(sort_by="n", descending=descending, absolute=True)
 
@@ -426,7 +417,7 @@ def test_apply_state_lists_no_keys_for_a_table_without_selection(
     frame: pl.DataFrame, config: TableConfig
 ) -> None:
     """Only a selectable table lists the matching keys."""
-    plain = TableConfig(table_id="t", key="key", columns=config.columns, url="/table")
+    plain = replace(config, selectable=False)
 
     assert apply_state(frame, TableState(), plain).matching_keys == []
 
@@ -446,13 +437,7 @@ def test_choice_options_come_from_the_frame_or_the_caller(
 def test_apply_state_keeps_integer_bounds_exact() -> None:
     """Integer bounds are not rounded to floats against integer columns."""
     frame = pl.DataFrame({"key": ["a", "b"], "big": [2**53, 2**53 + 1]})
-    config = TableConfig(
-        table_id="t",
-        key="key",
-        columns=(ColumnConfig("key"), ColumnConfig("big", filter="number")),
-        url="/",
-        selectable=True,
-    )
+    config = replace(SELECTABLE, columns=(ColumnConfig("key"), ColumnConfig("big", filter="number")))
 
     state = parse_state({"t.min__big": [str(2**53 + 1)]}, config)
 
@@ -464,9 +449,7 @@ def test_apply_state_gives_the_same_text_for_row_and_matching_keys() -> None:
     """Keys of any type have one text form for the rows and the selection."""
     frame = pl.DataFrame({"when": [datetime.fromisoformat("2026-01-01")], "flag": [True]})
     for key in ("when", "flag"):
-        config = TableConfig(
-            table_id="t", key=key, columns=(ColumnConfig(key),), url="/", selectable=True
-        )
+        config = replace(SELECTABLE, key=key, columns=(ColumnConfig(key),))
 
         view = apply_state(frame.lazy(), TableState(), config)
 
@@ -478,9 +461,7 @@ def test_apply_state_pages_a_lazy_frame_without_selection(
     frame: pl.DataFrame, config: TableConfig
 ) -> None:
     """A table without selection counts the matching rows of a LazyFrame."""
-    plain = TableConfig(
-        table_id="t", key="key", columns=config.columns, url="/table", page_size=3
-    )
+    plain = replace(config, selectable=False, page_size=3)
 
     view = apply_state(frame.lazy(), TableState(sort_by="count", page=2), plain)
 
@@ -506,13 +487,7 @@ def test_apply_state_fits_bounds_to_the_column_type(
 ) -> None:
     """Bounds that parse are compared with the column without failing."""
     frame = pl.DataFrame({"key": ["a", "b"], "value": values})
-    config = TableConfig(
-        table_id="t",
-        key="key",
-        columns=(ColumnConfig("key"), ColumnConfig("value", filter="number")),
-        url="/",
-        selectable=True,
-    )
+    config = VALUE_CONFIG
 
     state = parse_state({"t.min__value": [bound]}, config)
 
@@ -522,7 +497,7 @@ def test_apply_state_fits_bounds_to_the_column_type(
 def test_apply_state_shows_binary_keys_of_a_table_without_selection() -> None:
     """Only a selectable table casts its keys to text."""
     frame = pl.DataFrame({"key": [b"\xff", b"\xfe"], "label": ["a", "b"]})
-    config = TableConfig(table_id="t", key="key", columns=(ColumnConfig("label"),), url="/")
+    config = replace(SELECTABLE, columns=(ColumnConfig("label"),), selectable=False)
 
     view = apply_state(frame, TableState(), config)
 
@@ -567,13 +542,7 @@ def test_apply_state_compares_integer_columns_exactly(
 ) -> None:
     """Integer bounds keep their precision against integer columns of any width."""
     frame = pl.DataFrame({"key": ["a", "b"], "value": pl.Series(values, dtype=dtype)})
-    config = TableConfig(
-        table_id="t",
-        key="key",
-        columns=(ColumnConfig("key"), ColumnConfig("value", filter="number")),
-        url="/",
-        selectable=True,
-    )
+    config = VALUE_CONFIG
 
     state = parse_state({f"t.{side}__value": [str(bound)]}, config)
 
@@ -583,13 +552,7 @@ def test_apply_state_compares_integer_columns_exactly(
 def test_apply_state_out_of_range_bounds_skip_nulls() -> None:
     """A bound past every integer type still matches no null value."""
     frame = pl.DataFrame({"key": ["a", "b"], "value": [1, None]})
-    config = TableConfig(
-        table_id="t",
-        key="key",
-        columns=(ColumnConfig("key"), ColumnConfig("value", filter="number")),
-        url="/",
-        selectable=True,
-    )
+    config = VALUE_CONFIG
 
     state = parse_state({"t.min__value": [str(-(2**200))]}, config)
 
