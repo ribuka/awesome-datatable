@@ -12,6 +12,7 @@ import polars as pl
 from .bounds import bound_condition
 from .config import TableConfig
 from .counts import counts_by_value, value_counts
+from .dtypes import physical_type
 from .formatting import format_value
 from .state import Bound, TableState
 
@@ -237,20 +238,11 @@ def _bin_index(
     return pl.when(values.is_not_null()).then(index)
 
 
-def _physical(dtype: pl.DataType) -> pl.DataType:
-    """Return the integer type a binned column is stored as."""
-    if isinstance(dtype, pl.Date):
-        return pl.Int32()
-    if isinstance(dtype, pl.Datetime):
-        return pl.Int64()
-    return dtype
-
-
 def _value_texts(values: list[int] | list[float], dtype: pl.DataType) -> list[str]:
     """Return bin edges, given as physical values of a column type, as text."""
     if not dtype.is_temporal():
         return [format_value(value) for value in values]
-    series = pl.Series(values, dtype=pl.Int64).cast(_physical(dtype)).cast(dtype)
+    series = pl.Series(values, dtype=pl.Int64).cast(physical_type(dtype)).cast(dtype)
     return series.dt.to_string(TEMPORAL_FORMATS[dtype.base_type()]).to_list()
 
 
@@ -281,7 +273,7 @@ def _in_bounds(
         {"first": [first for first, _ in bins], "last": [last for _, last in bins]},
         schema={"first": pl.Int128, "last": pl.Int128},
     )
-    edges = edges.cast(_physical(dtype)).cast(dtype)
+    edges = edges.cast(physical_type(dtype)).cast(dtype)
     conditions = []
     if low is not None:
         conditions.append(bound_condition("last", low, dtype, lower=True))

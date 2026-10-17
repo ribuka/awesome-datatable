@@ -6,40 +6,8 @@ import math
 
 import polars as pl
 
+from .dtypes import integer_range
 from .state import Bound
-
-# The width of each polars integer type.
-INTEGER_BITS = (
-    (pl.Int8, 8),
-    (pl.Int16, 16),
-    (pl.Int32, 32),
-    (pl.Int64, 64),
-    (pl.Int128, 128),
-    (pl.UInt8, 8),
-    (pl.UInt16, 16),
-    (pl.UInt32, 32),
-    (pl.UInt64, 64),
-    (pl.UInt128, 128),
-)
-
-
-def integer_range(dtype: pl.DataType) -> tuple[int, int]:
-    """Return the smallest and largest value of an integer type.
-
-    Parameters
-    ----------
-    dtype : pl.DataType
-        Integer type, signed or unsigned, of 8 to 128 bits.
-
-    Returns
-    -------
-    tuple[int, int]
-        Inclusive range of the type.
-    """
-    bits = next(bits for kind, bits in INTEGER_BITS if dtype == kind)
-    if dtype.is_signed_integer():
-        return -(2 ** (bits - 1)), 2 ** (bits - 1) - 1
-    return 0, 2**bits - 1
 
 
 def bound_condition(name: str, bound: Bound, dtype: pl.DataType, *, lower: bool) -> pl.Expr:
