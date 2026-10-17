@@ -62,7 +62,7 @@ The paths are under `src/awesome_datatable/`.
 | `summary.py` | `TableSummary` and `summarize_table`: what the table shows over every row of the frame, whatever the state (column types, choices from `choice_options`, counts, histograms), made once per frame. |
 | `export.py` | `parse_export`: form fields → `ExportRequest`; `export_file`: the filtered or selected rows as an `ExportFile` (CSV or Parquet, its name and download headers); `export_rows`, `file_content`, `export_filename`, `parse_selection`. |
 | `bounds.py` | `bound_condition`: a column compared with a lower or upper bound, exactly for integers. |
-| `histograms.py` | `count_histograms`: the distribution of each column under its name (`Histogram` of bins, or `TopValues`) over every row; `mark_histograms`: the bins and values a state's filters keep (`in_filter`); `column_histograms` (both at once), `integer_bins`, and `float_bins`. |
+| `histograms.py` | `count_histograms`: the distribution of each column under its name (`Histogram` of bins, or `TopValues`) over every row; `mark_histograms`: the bins and values a state's filters keep (`in_filter`); `integer_bins` and `float_bins`. |
 | `chips.py` | `FilterChip` and `filter_chips`: the column filters in use as chips above the table. |
 | `counts.py` | `ColumnCounts` and `count_values`: rows of each choice value and null values per filtered column, for the column menus; `value_counts` and `counts_by_value`: the rows of each value of a column as text, which `count_histograms` also uses for its top values. |
 | `pagination.py` | `Page` and `paginate`: the page among the rows. |
@@ -436,7 +436,7 @@ header checkbox's matching keys, the export, and anything else built on
   and the column type under the name (`dtype_label`: polars' short names such
   as `str`, `cat`, `i64`, `f64`, `datetime[μs]`).
 - `histograms`: under the type, the distribution of the column over every
-  row of the frame (`column_histograms`), counted on the server and drawn
+  row of the frame (`count_histograms`), counted on the server and drawn
   without a script, so its shape stays the same while the filters change
   and reads as a base. Turn it off when every row of the frame is not a
   meaningful base (a table of rows the user chose, for example).

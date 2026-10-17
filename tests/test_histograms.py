@@ -21,15 +21,25 @@ from awesome_datatable import (
     parse_state,
 )
 from awesome_datatable.histograms import (
-    column_histograms,
+    ColumnHistogram,
+    count_histograms,
     float_bins,
     integer_bins,
+    mark_histograms,
 )
 
 
 def _config(*columns: ColumnConfig) -> TableConfig:
     """Return a table of the given columns keyed by ``key``."""
     return TableConfig(table_id="t", key="key", columns=columns, url="/t", histograms=True)
+
+
+def _histograms(
+    frame: pl.DataFrame | pl.LazyFrame, state: TableState, config: TableConfig
+) -> dict[str, ColumnHistogram]:
+    """Return the histograms of every row of a frame with a state's filters marked."""
+    schema = frame.lazy().collect_schema()
+    return mark_histograms(count_histograms(frame, config, schema), state, schema)
 
 
 def _bins(histogram: object) -> list[tuple[str, str, int, bool]]:
@@ -74,7 +84,7 @@ def test_integer_histogram_counts_every_row_and_ignores_nulls() -> None:
     frame = pl.DataFrame({"key": list("abcde"), "n": [1, 2, 2, 5, None]})
     config = _config(ColumnConfig("key"), ColumnConfig("n", filter="number"))
 
-    histograms = column_histograms(frame, TableState(), config)
+    histograms = _histograms(frame, TableState(), config)
 
     assert list(histograms) == ["n"]
     assert _bins(histograms["n"]) == [
@@ -94,7 +104,7 @@ def test_float_histogram_skips_nan_and_infinite_values() -> None:
     )
     config = _config(ColumnConfig("key"), ColumnConfig("x"))
 
-    histogram = column_histograms(frame, TableState(), config)["x"]
+    histogram = _histograms(frame, TableState(), config)["x"]
 
     bins = _bins(histogram)
     assert len(bins) == 20
@@ -110,7 +120,7 @@ def test_single_value_columns_have_one_bin() -> None:
     """A float column with one distinct value has one bin holding every row."""
     frame = pl.DataFrame({"key": list("ab"), "x": [2.5, 2.5]})
 
-    histogram = column_histograms(frame, TableState(), _config(ColumnConfig("x")))["x"]
+    histogram = _histograms(frame, TableState(), _config(ColumnConfig("x")))["x"]
 
     assert _bins(histogram) == [("2.5", "2.5", 2, True)]
 
@@ -129,7 +139,7 @@ def test_temporal_histograms_bin_by_time() -> None:
     )
     config = _config(ColumnConfig("when"), ColumnConfig("day"))
 
-    histograms = column_histograms(frame, TableState(), config)
+    histograms = _histograms(frame, TableState(), config)
 
     when = _bins(histograms["when"])
     assert len(when) == 20
@@ -150,7 +160,7 @@ def test_histograms_do_not_change_with_the_filters() -> None:
     config = _config(ColumnConfig("key"), ColumnConfig("n", filter="number"))
     state = parse_state({"t.min__n": ["2"], "t.max__n": ["3.5"]}, config)
 
-    histogram = column_histograms(frame, state, config)["n"]
+    histogram = _histograms(frame, state, config)["n"]
 
     assert [(b.count, b.in_filter) for b in histogram.bins] == [
         (1, False),
@@ -167,7 +177,7 @@ def test_bounds_fade_wide_integer_bins_by_overlap() -> None:
     config = _config(ColumnConfig("n", filter="number"))
     state = parse_state({"t.min__n": ["7"], "t.max__n": ["10"]}, config)
 
-    histogram = column_histograms(frame, state, config)["n"]
+    histogram = _histograms(frame, state, config)["n"]
 
     assert [(b.lower, b.upper) for b in histogram.bins if b.in_filter] == [
         ("5", "9"),
@@ -181,15 +191,15 @@ def test_bounds_fade_float_bins_by_their_half_open_edges() -> None:
     config = _config(ColumnConfig("x", filter="number"))
     state = parse_state({"t.min__x": ["1"], "t.max__x": ["1.5"]}, config)
 
-    histogram = column_histograms(frame, state, config)["x"]
+    histogram = _histograms(frame, state, config)["x"]
 
     inside = [(b.lower, b.upper) for b in histogram.bins if b.in_filter]
     assert inside[0] == ("1", "1.1")
     assert inside[-1] == ("1.5", "1.6")
-    assert not column_histograms(
+    assert not _histograms(
         frame, parse_state({"t.min__x": ["2"]}, config), config
     )["x"].bins[-2].in_filter
-    assert column_histograms(frame, parse_state({"t.min__x": ["2"]}, config), config)[
+    assert _histograms(frame, parse_state({"t.min__x": ["2"]}, config), config)[
         "x"
     ].bins[-1].in_filter
 
@@ -200,7 +210,7 @@ def test_datetime_bounds_fade_the_bins_outside_them() -> None:
     config = _config(ColumnConfig("day", filter="datetime"))
     state = parse_state({"t.min__day": ["2026-01-02T12:00"]}, config)
 
-    histogram = column_histograms(frame, state, config)["day"]
+    histogram = _histograms(frame, state, config)["day"]
 
     assert [(b.lower, b.in_filter) for b in histogram.bins] == [
         ("2026-01-01", False),
@@ -220,7 +230,7 @@ def test_category_columns_show_their_top_values() -> None:
     )
     config = _config(ColumnConfig("lot", filter="choice"))
 
-    histogram = column_histograms(frame, TableState(), config)["lot"]
+    histogram = _histograms(frame, TableState(), config)["lot"]
 
     assert histogram == TopValues(
         values=(
@@ -242,7 +252,7 @@ def test_checked_values_fade_the_others() -> None:
     config = _config(ColumnConfig("ok", filter="choice"))
     state = parse_state({"t.eq__ok": ["false"]}, config)
 
-    histogram = column_histograms(frame, state, config)["ok"]
+    histogram = _histograms(frame, state, config)["ok"]
 
     assert histogram == TopValues(
         values=(TopValue("true", 2, False), TopValue("false", 1, True)), others=0
@@ -263,7 +273,7 @@ def test_columns_without_a_distribution_have_none() -> None:
     )
     config = _config(*(ColumnConfig(name) for name in frame.columns))
 
-    assert column_histograms(frame, TableState(), config) == {}
+    assert _histograms(frame, TableState(), config) == {}
 
 
 def test_histograms_of_a_lazy_frame_match_a_data_frame(frame: pl.DataFrame) -> None:
@@ -277,10 +287,10 @@ def test_histograms_of_a_lazy_frame_match_a_data_frame(frame: pl.DataFrame) -> N
         ),
         url="/t",
     )
-    eager = column_histograms(
+    eager = _histograms(
         frame.with_columns(pl.col("group").cast(pl.Categorical)), TableState(), config
     )
-    lazy = column_histograms(
+    lazy = _histograms(
         frame.lazy().with_columns(pl.col("group").cast(pl.Categorical)), TableState(), config
     )
 
@@ -321,7 +331,7 @@ def test_float_values_on_an_edge_go_to_the_bin_that_the_bounds_keep() -> None:
     config = _config(ColumnConfig("x", filter="number"))
     state = parse_state({"t.min__x": ["0.18"]}, config)
 
-    histogram = column_histograms(frame, state, config)["x"]
+    histogram = _histograms(frame, state, config)["x"]
 
     # Each bin holding a value is kept exactly when the filter keeps the value.
     edges = float_bins(0.1, 0.5)
@@ -349,7 +359,7 @@ def test_float_histograms_cover_the_whole_float_range(
     """Edges and bins stay finite and correct for ranges wider than the largest float."""
     frame = pl.DataFrame({"key": list("abc"), "x": values})
 
-    histogram = column_histograms(frame, TableState(), _config(ColumnConfig("x")))["x"]
+    histogram = _histograms(frame, TableState(), _config(ColumnConfig("x")))["x"]
 
     assert {index: b.count for index, b in enumerate(histogram.bins) if b.count} == counts
     edges = float_bins(values[0], values[-1])

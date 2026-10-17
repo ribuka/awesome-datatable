@@ -449,32 +449,3 @@ def mark_histograms(
             )
     return marked
 
-
-def column_histograms(
-    frame: pl.DataFrame | pl.LazyFrame,
-    state: TableState,
-    config: TableConfig,
-    schema: Mapping[str, pl.DataType] | None = None,
-) -> dict[str, ColumnHistogram]:
-    """Summarize the distribution of each shown column with a state's filters marked.
-
-    Parameters
-    ----------
-    frame : pl.DataFrame | pl.LazyFrame
-        Every row of the table.
-    state : TableState
-        State whose bounds and checked values fade the bins and values
-        outside them.
-    config : TableConfig
-        Table settings.
-    schema : Mapping[str, pl.DataType] | None, default None
-        Column types of the frame; collected from it if ``None``.
-
-    Returns
-    -------
-    dict[str, ColumnHistogram]
-        ``count_histograms`` of the frame marked by ``mark_histograms``.
-    """
-    if schema is None:
-        schema = frame.lazy().collect_schema()
-    return mark_histograms(count_histograms(frame, config, schema), state, schema)

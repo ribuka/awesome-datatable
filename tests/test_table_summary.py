@@ -14,11 +14,7 @@ from awesome_datatable import (
     summarize_table,
 )
 from awesome_datatable.counts import counts_by_value, value_counts
-from awesome_datatable.histograms import (
-    column_histograms,
-    count_histograms,
-    mark_histograms,
-)
+from awesome_datatable.histograms import count_histograms, mark_histograms
 
 
 def test_summary_holds_the_types_choices_counts_and_histograms(
@@ -52,13 +48,15 @@ def test_apply_state_takes_the_menus_from_a_given_summary(
     assert view.options == {"group": ["a", "b", "z"]}
     assert view.counts == summary.counts
     assert view.types == summary.types
-    assert view.histograms == column_histograms(frame, state, config)
+    assert view.histograms == mark_histograms(
+        count_histograms(frame, config), state, frame.schema
+    )
 
 
-def test_marking_counted_histograms_equals_counting_with_the_state(
+def test_marking_counted_histograms_fades_what_the_state_leaves_out(
     frame: pl.DataFrame, config: TableConfig
 ) -> None:
-    """Counting once and marking each state gives the histograms of that state."""
+    """Counting once and marking each state fades the bins and values outside it."""
     state = parse_state(
         {"t.min__count": ["2"], "t.max__score": ["1"], "t.eq__group": ["a"]}, config
     )
@@ -66,7 +64,7 @@ def test_marking_counted_histograms_equals_counting_with_the_state(
 
     marked = mark_histograms(counted, state, frame.schema)
 
-    assert marked == column_histograms(frame, state, config)
+    assert list(marked) == list(counted)
     assert [b.in_filter for b in marked["count"].bins] == [False, True, True]
     assert mark_histograms(counted, TableState(), frame.schema) == counted
 
