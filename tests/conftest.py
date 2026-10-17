@@ -1,13 +1,21 @@
-"""Fixtures of the data table tests: a small frame of every column type."""
+"""Fixtures of the data table tests: a small frame of every column type and its templates."""
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime
 
 import polars as pl
 import pytest
+from html_tree import Element, Render, parse_html
+from jinja2 import Environment, select_autoescape
 
-from awesome_datatable import ColumnConfig, TableConfig
+from awesome_datatable import (
+    ColumnConfig,
+    TableConfig,
+    TableView,
+    configure_environment,
+)
 
 
 @pytest.fixture
@@ -56,3 +64,45 @@ def config() -> TableConfig:
         selection_name="keys",
         default_sort="key",
     )
+
+
+@pytest.fixture
+def environment() -> Environment:
+    """Return a bare Jinja2 environment with the data table templates."""
+    environment = Environment(autoescape=select_autoescape(["html"]))
+    configure_environment(environment, static_url="/datatable")
+    return environment
+
+
+@pytest.fixture
+def render(environment: Environment) -> Render:
+    """Return a function that renders one macro call of ``datatable/macros.html`` and parses it.
+
+    The function takes the call, such as ``"{{ fragment(config, view) }}"``,
+    and the template context as keyword arguments.
+    """
+
+    def render(call: str, **context: object) -> Element:
+        """Render ``call`` with ``context`` and return the parsed HTML."""
+        template = environment.from_string(
+            '{% from "datatable/macros.html" import container, export_button, fragment %}' + call
+        )
+        return parse_html(template.render(**context))
+
+    return render
+
+
+@pytest.fixture
+def fragment(render: Render) -> Render:
+    """Return a function that renders ``fragment(config, view, selected)`` and parses it.
+
+    The function takes the config, the view, and optionally the selected keys.
+    """
+
+    def fragment(config: TableConfig, view: TableView, selected: Iterable[str] = ()) -> Element:
+        """Render the fragment of ``view`` with ``selected`` checked."""
+        return render(
+            "{{ fragment(config, view, selected=selected) }}", config=config, view=view, selected=selected
+        )
+
+    return fragment

@@ -42,6 +42,14 @@ Besides its default rules, ruff checks import order (`I`), pyupgrade (`UP`),
 bugbear (`B`), NumPy-style docstrings (`D`), and type hints (`ANN`), as set in
 `[tool.ruff.lint]` of `pyproject.toml` (`tests/test_lint_config.py`).
 
+The template tests render the macros with a bare Jinja2 environment (the
+`render` and `fragment` fixtures of `tests/conftest.py`) and read the HTML
+as an element tree built with the standard library's `html.parser`
+(`tests/html_tree.py`), picking elements with simple CSS selectors such as
+`div[data-dt-menu="group"] input[data-dt-null-value]` instead of matching
+the markup with regular expressions. The tree also fails a test whose HTML
+leaves an element open or closes the wrong one.
+
 The browser tests (`tests/e2e/`, marked `e2e`, left out of a plain
 `uv run -m pytest`) drive the installed Chrome with Playwright through
 `datatable.js` and `datatable.css`. They use a demo app only for the tests
