@@ -38,6 +38,10 @@ uv run -m pytest -m e2e -n logical   # browser tests (needs Chrome)
 CI runs all three on every pull request to `main`; the browser tests run in
 a job of their own (`e2e`).
 
+Besides its default rules, ruff checks import order (`I`), pyupgrade (`UP`),
+bugbear (`B`), NumPy-style docstrings (`D`), and type hints (`ANN`), as set in
+`[tool.ruff.lint]` of `pyproject.toml` (`tests/test_lint_config.py`).
+
 The browser tests (`tests/e2e/`, marked `e2e`, left out of a plain
 `uv run -m pytest`) drive the installed Chrome with Playwright through
 `datatable.js` and `datatable.css`. They use a demo app only for the tests
