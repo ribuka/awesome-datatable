@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import io
 import json
-from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, get_args
@@ -14,7 +13,7 @@ import polars as pl
 
 from .config import TableConfig
 from .parameter_names import EXPORT_FORMAT_PARAMETER, EXPORT_ROWS_PARAMETER
-from .parameters import Parameters, parameter_lists
+from .parameters import Parameters, last_choice, last_value, parameter_lists
 from .query import key_text, matching_rows
 from .state import TableState, parse_state
 
@@ -93,35 +92,6 @@ class ExportFile:
         }
 
 
-def _choice[T: str](raw: Sequence[str], allowed: tuple[T, ...], key: str) -> T:
-    """Return the last value of a parameter that must be one of ``allowed``.
-
-    Parameters
-    ----------
-    raw : Sequence[str]
-        Every value of the parameter.
-    allowed : tuple[T, ...]
-        Values it may have.
-    key : str
-        Parameter name used in errors.
-
-    Returns
-    -------
-    T
-        The value.
-
-    Raises
-    ------
-    ValueError
-        If the parameter is missing or has another value.
-    """
-    text = raw[-1].strip() if raw else ""
-    for value in allowed:
-        if text == value:
-            return value
-    raise ValueError(f"{key!r} must be one of {', '.join(allowed)}: {text!r}")
-
-
 def parse_selection(text: str) -> tuple[str, ...]:
     """Parse the selection sent as a JSON array of keys.
 
@@ -181,8 +151,14 @@ def parse_export(parameters: Parameters, config: TableConfig) -> ExportRequest:
     fields = parameter_lists(parameters)
     format_key = config.parameter(EXPORT_FORMAT_PARAMETER)
     rows_key = config.parameter(EXPORT_ROWS_PARAMETER)
-    file_format = _choice(fields.get(format_key, ()), EXPORT_FORMATS, format_key)
-    rows = _choice(fields.get(rows_key, ()), EXPORT_ROWS, rows_key)
+    file_format = last_choice(
+        fields.get(format_key, ()),
+        EXPORT_FORMATS,
+        f"{format_key!r} must be one of {', '.join(EXPORT_FORMATS)}",
+    )
+    rows = last_choice(
+        fields.get(rows_key, ()), EXPORT_ROWS, f"{rows_key!r} must be one of {', '.join(EXPORT_ROWS)}"
+    )
     state = parse_state(
         {key: raw for key, raw in fields.items() if key not in (format_key, rows_key)},
         config,
@@ -191,8 +167,8 @@ def parse_export(parameters: Parameters, config: TableConfig) -> ExportRequest:
         return ExportRequest(file_format, rows, state)
     if not config.selectable:
         raise ValueError("a table without selection has no selected rows")
-    raw = fields.get(config.selection_name, ())
-    return ExportRequest(file_format, rows, state, parse_selection(raw[-1] if raw else "[]"))
+    selection = last_value(fields.get(config.selection_name, ()), "[]")
+    return ExportRequest(file_format, rows, state, parse_selection(selection))
 
 
 def export_rows(

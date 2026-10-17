@@ -44,3 +44,50 @@ def parameter_lists(parameters: Parameters) -> dict[str, list[str]]:
     if isinstance(parameters, MultiValueParameters):
         return {key: [str(value) for value in parameters.getlist(key)] for key in parameters}
     return {key: [str(value) for value in values] for key, values in parameters.items()}
+
+
+def last_value(values: Sequence[str], default: str = "") -> str:
+    """Return the last value of a parameter, which the parsers read.
+
+    Parameters
+    ----------
+    values : Sequence[str]
+        Every value of the parameter.
+    default : str, optional
+        Value returned for a parameter without any value.
+
+    Returns
+    -------
+    str
+        The last value, or ``default``.
+    """
+    return values[-1] if values else default
+
+
+def last_choice[T: str](values: Sequence[str], allowed: tuple[T, ...], error: str) -> T:
+    """Return the last value of a parameter that must be one of ``allowed``.
+
+    Parameters
+    ----------
+    values : Sequence[str]
+        Every value of the parameter; a missing one reads as ``""``.
+    allowed : tuple[T, ...]
+        Values it may have, stripped; include ``""`` to allow a blank one.
+    error : str
+        Start of the error message, followed by the value.
+
+    Returns
+    -------
+    T
+        The stripped value.
+
+    Raises
+    ------
+    ValueError
+        If the stripped value is not in ``allowed``.
+    """
+    text = last_value(values).strip()
+    for value in allowed:
+        if text == value:
+            return value
+    raise ValueError(f"{error}: {text!r}")
