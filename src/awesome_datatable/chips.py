@@ -6,16 +6,14 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from .config import TableConfig
-from .state import (
+from .parameter_names import (
     EQUALS_PREFIX,
     MAX_PREFIX,
     MIN_PREFIX,
     NULL_PREFIX,
     TEXT_PREFIX,
-    Bound,
-    TableState,
-    parameter_name,
 )
+from .state import Bound, TableState
 
 
 @dataclass(frozen=True)
@@ -93,14 +91,14 @@ def filter_chips(state: TableState, config: TableConfig) -> list[FilterChip]:
             chips.append(
                 FilterChip(
                     f'{header} ~ "{state.text[name]}"',
-                    (parameter_name(config, TEXT_PREFIX + name),),
+                    (config.parameter(TEXT_PREFIX + name),),
                 )
             )
         if name in state.equals:
             chips.append(
                 FilterChip(
                     f"{header} ∈ {{{', '.join(state.equals[name])}}}",
-                    (parameter_name(config, EQUALS_PREFIX + name),),
+                    (config.parameter(EQUALS_PREFIX + name),),
                 )
             )
         if name in state.ranges:
@@ -109,8 +107,8 @@ def filter_chips(state: TableState, config: TableConfig) -> list[FilterChip]:
                 FilterChip(
                     _range_label(header, lower, upper),
                     (
-                        parameter_name(config, MIN_PREFIX + name),
-                        parameter_name(config, MAX_PREFIX + name),
+                        config.parameter(MIN_PREFIX + name),
+                        config.parameter(MAX_PREFIX + name),
                     ),
                 )
             )
@@ -118,7 +116,7 @@ def filter_chips(state: TableState, config: TableConfig) -> list[FilterChip]:
             chips.append(
                 FilterChip(
                     f"{header} {state.nulls[name]}",
-                    (parameter_name(config, NULL_PREFIX + name),),
+                    (config.parameter(NULL_PREFIX + name),),
                 )
             )
     return chips
