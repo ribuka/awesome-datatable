@@ -296,6 +296,17 @@ class TableConfig:
         return {column.name: column for column in self.columns if column.filter is not None}
 
     @property
+    def choice_columns(self) -> list[str]:
+        """Return the names of the columns with a ``"choice"`` filter.
+
+        Returns
+        -------
+        list[str]
+            Names of the columns whose ``filter`` is ``"choice"``, in order.
+        """
+        return [column.name for column in self.columns if column.filter == "choice"]
+
+    @property
     def query_columns(self) -> str:
         """Return the columns that the table's query can name, as JSON.
 

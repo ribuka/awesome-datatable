@@ -62,9 +62,7 @@ def choice_options(
     dict[str, list[str]]
         Non-null values as sorted text, keyed by column name.
     """
-    names = [
-        column.name for column in config.filtered_columns.values() if column.filter == "choice"
-    ]
+    names = config.choice_columns
     if not names:
         return {}
     values = frame.lazy().select(

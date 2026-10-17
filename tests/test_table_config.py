@@ -45,3 +45,20 @@ def test_table_config_names_its_query_parameters() -> None:
         "max": "t.max__",
         "null": "t.null__",
     }
+
+
+def test_table_config_names_its_choice_columns_in_order() -> None:
+    """``choice_columns`` lists the columns with a ``"choice"`` filter in order."""
+    config = TableConfig(
+        table_id="t",
+        key="key",
+        columns=(
+            ColumnConfig("key"),
+            ColumnConfig("grade", filter="choice"),
+            ColumnConfig("note", filter="text"),
+            ColumnConfig("lot", filter="choice"),
+        ),
+        url="/t",
+    )
+
+    assert config.choice_columns == ["grade", "lot"]

@@ -56,7 +56,7 @@ The paths are under `src/awesome_datatable/`.
 
 | Path | Contents |
 | --- | --- |
-| `config.py` | `TableConfig` and `ColumnConfig`: what the application decides; `TableConfig.parameter` and `TableConfig.parameter_names` name the table's query parameters (`<table_id>.<name>`). |
+| `config.py` | `TableConfig` and `ColumnConfig`: what the application decides; `TableConfig.parameter` and `TableConfig.parameter_names` name the table's query parameters (`<table_id>.<name>`); `TableConfig.choice_columns` names the columns with a `"choice"` filter. |
 | `state.py` | `TableState` and `parse_state`: query parameters → table state. |
 | `query.py` | `apply_state`: table state + frame (+ its `TableSummary`) → `TableView` (rows of one page, the page and its size, matching keys, choices, counts, column types, filter chips, histograms); `matching_rows` (the filtered and sorted rows that the view and the export share), `filter_expression`, `search_columns`, and `search_terms`. A `LazyFrame` is collected only for the page's rows and for the matching keys (or their count). |
 | `summary.py` | `TableSummary` and `summarize_table`: what the table shows over every row of the frame, whatever the state (column types, choices from `choice_options`, counts, histograms), made once per frame. |
@@ -64,7 +64,7 @@ The paths are under `src/awesome_datatable/`.
 | `bounds.py` | `bound_condition`: a column compared with a lower or upper bound, exactly for integers. |
 | `histograms.py` | `count_histograms`: the distribution of each column under its name (`Histogram` of bins, or `TopValues`) over every row; `mark_histograms`: the bins and values a state's filters keep (`in_filter`); `column_histograms` (both at once), `integer_bins`, and `float_bins`. |
 | `chips.py` | `FilterChip` and `filter_chips`: the column filters in use as chips above the table. |
-| `counts.py` | `ColumnCounts` and `count_values`: rows of each choice value and null values per filtered column, for the column menus. |
+| `counts.py` | `ColumnCounts` and `count_values`: rows of each choice value and null values per filtered column, for the column menus; `value_counts` and `counts_by_value`: the rows of each value of a column as text, which `count_histograms` also uses for its top values. |
 | `pagination.py` | `Page` and `paginate`: the page among the rows. |
 | `formatting.py` | `format_value`: the cell text (`dt_cell` filter); `dtype_label`: the column type under each column name. |
 | `parameter_names.py` | The query parameter names and column filter prefixes (`sort`, `q__`, and the others) and `PARAMETER_NAMES`, the one place that names them for the parsers, the templates (`dt_parameters`), and `datatable.js` (`data-dt-parameters`). |

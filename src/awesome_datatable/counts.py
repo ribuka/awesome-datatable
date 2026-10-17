@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from typing import Any
 
 import polars as pl
 
@@ -26,6 +28,39 @@ class ColumnCounts:
     nulls: dict[str, int]
 
 
+def value_counts(name: str) -> pl.Expr:
+    """Return an expression that counts the non-null values of a column as text.
+
+    Parameters
+    ----------
+    name : str
+        Column name.
+
+    Returns
+    -------
+    pl.Expr
+        One list of ``{"value": text, "n": rows}`` structs, which
+        ``counts_by_value`` turns into a dict once collected.
+    """
+    return pl.col(name).cast(pl.String).alias("value").drop_nulls().value_counts(name="n").implode()
+
+
+def counts_by_value(pairs: Iterable[Mapping[str, Any]]) -> dict[str, int]:
+    """Return the counts collected from ``value_counts`` keyed by value.
+
+    Parameters
+    ----------
+    pairs : Iterable[Mapping[str, Any]]
+        The collected list of ``{"value": text, "n": rows}`` structs.
+
+    Returns
+    -------
+    dict[str, int]
+        Rows of each value.
+    """
+    return {pair["value"]: pair["n"] for pair in pairs}
+
+
 def count_values(frame: pl.DataFrame | pl.LazyFrame, config: TableConfig) -> ColumnCounts:
     """Count the values of the ``"choice"`` columns and the nulls of the filtered ones.
 
@@ -42,25 +77,14 @@ def count_values(frame: pl.DataFrame | pl.LazyFrame, config: TableConfig) -> Col
         The counts, collected in one query.
     """
     filtered = list(config.filtered_columns)
-    choices = [
-        name for name, column in config.filtered_columns.items() if column.filter == "choice"
-    ]
+    choices = config.choice_columns
     if not filtered:
         return ColumnCounts(values={}, nulls={})
     # Positional names keep the counts apart from any column name.
     counted = (
         frame.lazy()
         .select(
-            *(
-                pl.col(name)
-                .cast(pl.String)
-                .alias("value")
-                .drop_nulls()
-                .value_counts(name="n")
-                .implode()
-                .alias(f"values{index}")
-                for index, name in enumerate(choices)
-            ),
+            *(value_counts(name).alias(f"values{index}") for index, name in enumerate(choices)),
             *(
                 pl.col(name).null_count().alias(f"nulls{index}")
                 for index, name in enumerate(filtered)
@@ -71,7 +95,7 @@ def count_values(frame: pl.DataFrame | pl.LazyFrame, config: TableConfig) -> Col
     )
     return ColumnCounts(
         values={
-            name: {pair["value"]: pair["n"] for pair in counted[f"values{index}"]}
+            name: counts_by_value(counted[f"values{index}"])
             for index, name in enumerate(choices)
         },
         nulls={name: counted[f"nulls{index}"] for index, name in enumerate(filtered)},

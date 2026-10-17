@@ -11,6 +11,7 @@ import polars as pl
 
 from .bounds import bound_condition
 from .config import TableConfig
+from .counts import counts_by_value, value_counts
 from .formatting import format_value
 from .state import Bound, TableState
 
@@ -340,16 +341,7 @@ def count_histograms(
             _binned_values(name, kind).max().alias(f"max{index}")
             for index, (name, kind) in enumerate(binned.items())
         ),
-        *(
-            pl.col(name)
-            .cast(pl.String)
-            .alias("value")
-            .drop_nulls()
-            .value_counts(name="n")
-            .implode()
-            .alias(f"values{index}")
-            for index, name in enumerate(topped)
-        ),
+        *(value_counts(name).alias(f"values{index}") for index, name in enumerate(topped)),
     ).collect().row(0, named=True)
 
     cuts: dict[str, list[tuple[int, int]] | list[tuple[float, float]]] = {}
@@ -393,7 +385,7 @@ def count_histograms(
         )
     for index, name in enumerate(topped):
         pairs = sorted(
-            ((pair["value"], pair["n"]) for pair in ranges[f"values{index}"]),
+            counts_by_value(ranges[f"values{index}"]).items(),
             key=lambda pair: (-pair[1], pair[0]),
         )
         if not pairs:
